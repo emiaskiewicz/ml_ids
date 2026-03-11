@@ -17,4 +17,8 @@ outputs/*
 !data/processed/.gitkeep
 !outputs/.gitkeep
 
+#ignore logs
+logs/
+*.log
+
 .idea/
