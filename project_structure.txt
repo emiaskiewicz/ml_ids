@@ -4,11 +4,24 @@ pr_lic
 |___ config
 |    |___ base.yaml
 |___ data
+|    |___ cleaned
 |    |___ processed
 |    |___ raw
+|    |    |___ Benign-Monday-WorkingHours.pcap_ISCX.csv
+|    |    |___ Botnet-Friday-WorkingHours-Morning.pcap_ISCX.csv
+|    |    |___ Bruteforce-Tuesday-WorkingHours.pcap_ISCX.csv
+|    |    |___ DDoS-Friday-WorkingHours-Afternoon.pcap_ISCX.csv
+|    |    |___ DoS-Wednesday-WorkingHours.pcap_ISCX.csv
+|    |    |___ Infiltration-Thursday-WorkingHours-Afternoon.pcap_ISCX.csv
+|    |    |___ Portscan-Friday-WorkingHours-Afternoon.pcap_ISCX.csv
+|    |    |___ WebAttacks-Thursday-WorkingHours-Morning.pcap_ISCX.csv
 |___ make_tree.py
+|___ notebooks
+|    |___ inspect_raw_data.ipynb
 |___ outputs
 |___ project_structure.txt
 |___ requirements.txt
 |___ src
 |    |___ main.py
+|    |___ preprocessing
+|    |    |___ base_data.py
