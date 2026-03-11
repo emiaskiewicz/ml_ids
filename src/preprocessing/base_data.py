@@ -21,14 +21,11 @@ def setup_logger():
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s - %(message)s",
-        handlers=[
-            logging.FileHandler(LOG_PATH),
-            logging.StreamHandler()
-        ]
+        handlers=[logging.FileHandler(LOG_PATH), logging.StreamHandler()]
     )
 
 def load_csv(file_path: Path) -> pd.DataFrame:
-    df = pd.read_csv(file_path)
+    df = pd.read_csv(file_path, memory_map=True, low_memory=False)
     #fix column names (CIC IDS has leading spaces)
     df.columns = df.columns.str.strip()
     logging.info(f"Loaded {file_path.name} with shape {df.shape}")
@@ -75,16 +72,40 @@ def process_file(file_path: Path, dfs: list):
     dfs.append(df)
     return dfs
 
+def reduce_memory_usage(df: pd.DataFrame) -> pd.DataFrame:
+    start_mem = df.memory_usage(deep=True).sum() / 1024**2
+    for col in df.columns:
+        col_type = df[col].dtype
+        if pd.api.types.is_integer_dtype(col_type):
+            c_min = df[col].min()
+            c_max = df[col].max()
+            if c_min >= np.iinfo(np.int8).min and c_max <= np.iinfo(np.int8).max:
+                df[col] = df[col].astype(np.int8)
+            elif c_min >= np.iinfo(np.int16).min and c_max <= np.iinfo(np.int16).max:
+                df[col] = df[col].astype(np.int16)
+            elif c_min >= np.iinfo(np.int32).min and c_max <= np.iinfo(np.int32).max:
+                df[col] = df[col].astype(np.int32)
+        elif pd.api.types.is_float_dtype(col_type):
+            df[col] = pd.to_numeric(df[col], downcast="float")
+
+    if "Label" in df.columns:
+        df["Label"] = df["Label"].astype("category")
+
+    end_mem = df.memory_usage(deep=True).sum() / 1024**2
+    logging.info(f"Memory usage reduced from {start_mem:.2f} MB to {end_mem:.2f} MB")
+    return df
+
 def main():
     setup_logger()
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    files = list(RAW_DATA_DIR.glob("*.csv"))
+    files = sorted(RAW_DATA_DIR.glob("*.csv"))
     logging.info(f"Found {len(files)} files to process")
     dfs = []
 
     for file in files:
         dfs = process_file(file, dfs)
     main_df = pd.concat(dfs, ignore_index=True)
+    main_df = reduce_memory_usage(main_df)
 
     constant_columns = [col for col in main_df.columns if main_df[col].nunique(dropna=False) <= 1]
     main_df = main_df.drop(columns=constant_columns)

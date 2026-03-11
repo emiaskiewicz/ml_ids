@@ -1,0 +1,69 @@
+2026-03-11 19:10:26,719 - Found 8 files to process
+2026-03-11 19:10:26,720 - Processing file: Benign-Monday-WorkingHours.pcap_ISCX.csv
+2026-03-11 19:10:33,621 - Loaded Benign-Monday-WorkingHours.pcap_ISCX.csv with shape (529918, 84)
+2026-03-11 19:10:33,622 - Dropped ID and timestamp columns
+2026-03-11 19:10:33,749 - Replaced inf and -inf with NaN
+2026-03-11 19:10:33,807 - Missing values: 874 (0.0021% of dataset)
+2026-03-11 19:10:33,958 - Removed rows with NaN: 437 (0.0825% of rows)
+2026-03-11 19:10:36,120 - Removed duplicated rows: 1491 (0.2816% of rows)
+2026-03-11 19:10:36,148 - Shape after cleaning: (527990, 80)
+2026-03-11 19:10:36,155 - Processing file: Botnet-Friday-WorkingHours-Morning.pcap_ISCX.csv
+2026-03-11 19:10:38,740 - Loaded Botnet-Friday-WorkingHours-Morning.pcap_ISCX.csv with shape (191033, 84)
+2026-03-11 19:10:38,741 - Dropped ID and timestamp columns
+2026-03-11 19:10:38,797 - Replaced inf and -inf with NaN
+2026-03-11 19:10:38,819 - Missing values: 244 (0.0016% of dataset)
+2026-03-11 19:10:38,873 - Removed rows with NaN: 122 (0.0639% of rows)
+2026-03-11 19:10:39,437 - Removed duplicated rows: 585 (0.3064% of rows)
+2026-03-11 19:10:39,446 - Shape after cleaning: (190326, 80)
+2026-03-11 19:10:39,446 - Processing file: Bruteforce-Tuesday-WorkingHours.pcap_ISCX.csv
+2026-03-11 19:10:44,925 - Loaded Bruteforce-Tuesday-WorkingHours.pcap_ISCX.csv with shape (445909, 84)
+2026-03-11 19:10:44,927 - Dropped ID and timestamp columns
+2026-03-11 19:10:45,027 - Replaced inf and -inf with NaN
+2026-03-11 19:10:45,077 - Missing values: 528 (0.0015% of dataset)
+2026-03-11 19:10:45,215 - Removed rows with NaN: 264 (0.0592% of rows)
+2026-03-11 19:10:47,563 - Removed duplicated rows: 1238 (0.2778% of rows)
+2026-03-11 19:10:47,585 - Shape after cleaning: (444407, 80)
+2026-03-11 19:10:47,585 - Processing file: DDoS-Friday-WorkingHours-Afternoon.pcap_ISCX.csv
+2026-03-11 19:10:50,257 - Loaded DDoS-Friday-WorkingHours-Afternoon.pcap_ISCX.csv with shape (225745, 84)
+2026-03-11 19:10:50,257 - Dropped ID and timestamp columns
+2026-03-11 19:10:50,308 - Replaced inf and -inf with NaN
+2026-03-11 19:10:50,333 - Missing values: 68 (0.0004% of dataset)
+2026-03-11 19:10:50,396 - Removed rows with NaN: 34 (0.0151% of rows)
+2026-03-11 19:10:51,201 - Removed duplicated rows: 126 (0.0558% of rows)
+2026-03-11 19:10:51,211 - Shape after cleaning: (225585, 80)
+2026-03-11 19:10:51,211 - Processing file: DoS-Wednesday-WorkingHours.pcap_ISCX.csv
+2026-03-11 19:11:00,330 - Loaded DoS-Wednesday-WorkingHours.pcap_ISCX.csv with shape (692703, 84)
+2026-03-11 19:11:00,331 - Dropped ID and timestamp columns
+2026-03-11 19:11:00,493 - Replaced inf and -inf with NaN
+2026-03-11 19:11:00,573 - Missing values: 2594 (0.0047% of dataset)
+2026-03-11 19:11:00,771 - Removed rows with NaN: 1297 (0.1872% of rows)
+2026-03-11 19:11:04,326 - Removed duplicated rows: 8890 (1.2858% of rows)
+2026-03-11 19:11:04,376 - Shape after cleaning: (682516, 80)
+2026-03-11 19:11:04,376 - Processing file: Infiltration-Thursday-WorkingHours-Afternoon.pcap_ISCX.csv
+2026-03-11 19:11:10,014 - Loaded Infiltration-Thursday-WorkingHours-Afternoon.pcap_ISCX.csv with shape (288602, 84)
+2026-03-11 19:11:10,017 - Dropped ID and timestamp columns
+2026-03-11 19:11:10,137 - Replaced inf and -inf with NaN
+2026-03-11 19:11:10,205 - Missing values: 414 (0.0018% of dataset)
+2026-03-11 19:11:10,358 - Removed rows with NaN: 207 (0.0717% of rows)
+2026-03-11 19:11:12,110 - Removed duplicated rows: 649 (0.2250% of rows)
+2026-03-11 19:11:12,138 - Shape after cleaning: (287746, 80)
+2026-03-11 19:11:12,138 - Processing file: Portscan-Friday-WorkingHours-Afternoon.pcap_ISCX.csv
+2026-03-11 19:11:17,802 - Loaded Portscan-Friday-WorkingHours-Afternoon.pcap_ISCX.csv with shape (286467, 84)
+2026-03-11 19:11:17,803 - Dropped ID and timestamp columns
+2026-03-11 19:11:17,864 - Replaced inf and -inf with NaN
+2026-03-11 19:11:17,895 - Missing values: 742 (0.0032% of dataset)
+2026-03-11 19:11:17,972 - Removed rows with NaN: 371 (0.1295% of rows)
+2026-03-11 19:11:18,798 - Removed duplicated rows: 266 (0.0930% of rows)
+2026-03-11 19:11:18,812 - Shape after cleaning: (285830, 80)
+2026-03-11 19:11:18,812 - Processing file: WebAttacks-Thursday-WorkingHours-Morning.pcap_ISCX.csv
+2026-03-11 19:11:20,895 - Loaded WebAttacks-Thursday-WorkingHours-Morning.pcap_ISCX.csv with shape (170366, 84)
+2026-03-11 19:11:20,896 - Dropped ID and timestamp columns
+2026-03-11 19:11:20,946 - Replaced inf and -inf with NaN
+2026-03-11 19:11:20,965 - Missing values: 270 (0.0020% of dataset)
+2026-03-11 19:11:21,011 - Removed rows with NaN: 135 (0.0792% of rows)
+2026-03-11 19:11:21,523 - Removed duplicated rows: 550 (0.3231% of rows)
+2026-03-11 19:11:21,534 - Shape after cleaning: (169681, 80)
+2026-03-11 19:11:23,917 - Memory usage reduced from 1866.07 MB to 831.95 MB
+2026-03-11 19:11:26,375 - Dropped constant columns after merge: ['Bwd PSH Flags', 'Bwd URG Flags', 'Fwd Avg Bytes/Bulk', 'Fwd Avg Packets/Bulk', 'Fwd Avg Bulk Rate', 'Bwd Avg Bytes/Bulk', 'Bwd Avg Packets/Bulk', 'Bwd Avg Bulk Rate']
+2026-03-11 19:12:40,321 - Final dataset shape: (2814081, 72)
+2026-03-11 19:12:40,322 - Saved merged dataset to C:\Users\emilk\pr_lic\data\cleaned\cicids2017_preprocessed.csv
