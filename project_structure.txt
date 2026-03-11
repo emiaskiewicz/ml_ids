@@ -1,0 +1,14 @@
+pr_lic
+|___ .gitignore
+|___ README.md
+|___ config
+|    |___ base.yaml
+|___ data
+|    |___ processed
+|    |___ raw
+|___ make_tree.py
+|___ outputs
+|___ project_structure.txt
+|___ requirements.txt
+|___ src
+|    |___ main.py
