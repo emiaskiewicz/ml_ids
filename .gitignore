@@ -6,13 +6,15 @@ __pycache__/
 #ignore dataset files
 data/raw/*
 data/cleaned/*
-data/merged/*
+data/processed/*
+
+#ignore output files
+outputs/*
 
 #keep folder structure
 !data/raw/.gitkeep
 !data/cleaned/.gitkeep
-!data/merged/.gitkeep
-
-outputs/
+!data/processed/.gitkeep
+!outputs/.gitkeep
 
 .idea/
