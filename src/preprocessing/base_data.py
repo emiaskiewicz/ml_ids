@@ -59,6 +59,9 @@ def clean_dataframe(df: pd.DataFrame) -> pd.DataFrame:
     df.columns = df.columns.str.strip().str.replace(r"\s+", " ", regex=True).str.replace(" ", "_")
     logger.info("Normalized column names")
 
+    #normalize 'Label' values
+    df["Label"] = df["Label"].astype(str).str.strip().str.replace(r"\s+", " ", regex=True).str.upper()
+
     return df
 
 def process_file(file_path: Path, dfs: list):
@@ -91,6 +94,26 @@ def reduce_memory_usage(df: pd.DataFrame) -> pd.DataFrame:
     end_mem = df.memory_usage(deep=True).sum() / 1024**2
     logger.info(f"Memory usage reduced from {start_mem:.2f} MB to {end_mem:.2f} MB")
     return df
+
+def log_dataset_summary(df: pd.DataFrame) -> None:
+    logger.info(f"Final dataset shape: {df.shape}")
+    logger.info(f"Number of rows: {df.shape[0]}")
+    logger.info(f"Number of columns: {df.shape[1]}")
+
+    if "Label" in df.columns:
+        class_counts = df["Label"].value_counts(dropna=False)
+        class_percentages = df["Label"].value_counts(normalize=True, dropna=False) * 100
+
+        logger.info(f"Number of classes in 'Label': {df['Label'].nunique(dropna=False)}")
+        logger.info("Class distribution (counts):")
+        for label, count in class_counts.items():
+            logger.info(f"  {label}: {count}")
+
+        logger.info("Class distribution (percentages):")
+        for label, percentage in class_percentages.items():
+            logger.info(f"  {label}: {percentage:.4f}%")
+    else:
+        logger.warning("Column 'Label' not found, skipping class distribution logging")
 
 def main():
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
