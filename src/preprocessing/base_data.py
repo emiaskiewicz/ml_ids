@@ -55,6 +55,10 @@ def clean_dataframe(df: pd.DataFrame) -> pd.DataFrame:
     duplicate_percent = (removed_duplicate_rows / rows_before) * 100
     logger.info(f"Removed duplicated rows: {removed_duplicate_rows} ({duplicate_percent:.4f}% of rows)")
 
+    #normalize column names
+    df.columns = df.columns.str.strip().str.replace(r"\s+", " ", regex=True).str.replace(" ", "_")
+    logger.info("Normalized column names")
+
     return df
 
 def process_file(file_path: Path, dfs: list):
