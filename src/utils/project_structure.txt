@@ -1,12 +1,17 @@
-pr_lic
+root
 |___ .gitignore
 |___ README.md
 |___ config
 |    |___ base.yaml
 |___ data
 |    |___ cleaned
+|    |    |___ .gitkeep
+|    |    |___ cicids2017_preprocessed.csv
+|    |    |___ cicids2017_targets.csv
 |    |___ processed
+|    |    |___ .gitkeep
 |    |___ raw
+|    |    |___ .gitkeep
 |    |    |___ Benign-Monday-WorkingHours.pcap_ISCX.csv
 |    |    |___ Botnet-Friday-WorkingHours-Morning.pcap_ISCX.csv
 |    |    |___ Bruteforce-Tuesday-WorkingHours.pcap_ISCX.csv
@@ -15,13 +20,21 @@ pr_lic
 |    |    |___ Infiltration-Thursday-WorkingHours-Afternoon.pcap_ISCX.csv
 |    |    |___ Portscan-Friday-WorkingHours-Afternoon.pcap_ISCX.csv
 |    |    |___ WebAttacks-Thursday-WorkingHours-Morning.pcap_ISCX.csv
-|___ make_tree.py
+|___ logs
+|    |___ base_data_preprocessing.log
+|    |___ target_data_preprocessing.log
 |___ notebooks
 |    |___ inspect_raw_data.ipynb
 |___ outputs
-|___ project_structure.txt
+|    |___ .gitkeep
 |___ requirements.txt
 |___ src
 |    |___ main.py
 |    |___ preprocessing
 |    |    |___ base_data.py
+|    |    |___ preprocess.md
+|    |    |___ target_data.py
+|    |___ utils
+|    |    |___ logger.py
+|    |    |___ make_tree.py
+|    |    |___ project_structure.txt
