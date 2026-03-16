@@ -24,6 +24,28 @@ def load_csv(file_path: Path) -> pd.DataFrame:
     logger.info(f"Loaded {file_path.name} with shape {df.shape}")
     return df
 
+def normalize_label_values(df: pd.DataFrame) -> pd.DataFrame:
+    if "Label" not in df.columns:
+        logger.warning("Column 'Label' not found, skipping label normalization")
+        return df
+    #normalize 'Label' values
+    df["Label"] = df["Label"].astype(str).str.strip().str.replace(r"\s+", " ", regex=True).str.upper()
+    logger.info("Normalized 'Label' values")
+
+    #mapping different label values
+    label_mapping = {
+        "WEB ATTACK � BRUTE FORCE": "WEB ATTACK - BRUTE FORCE",
+        "WEB ATTACK – BRUTE FORCE": "WEB ATTACK - BRUTE FORCE",
+        "WEB ATTACK � XSS": "WEB ATTACK - XSS",
+        "WEB ATTACK – XSS": "WEB ATTACK - XSS",
+        "WEB ATTACK � SQL INJECTION": "WEB ATTACK - SQL INJECTION",
+        "WEB ATTACK – SQL INJECTION": "WEB ATTACK - SQL INJECTION",
+    }
+    df["Label"] = df["Label"].replace(label_mapping)
+    logger.info("Normalized values in 'Label' column")
+
+    return df
+
 def clean_dataframe(df: pd.DataFrame) -> pd.DataFrame:
     #drop ID and timestamp columns
     df = df.drop(columns=[c for c in DROP_COLUMNS if c in df.columns])
@@ -59,9 +81,7 @@ def clean_dataframe(df: pd.DataFrame) -> pd.DataFrame:
     df.columns = df.columns.str.strip().str.replace(r"\s+", " ", regex=True).str.replace(" ", "_")
     logger.info("Normalized column names")
 
-    #normalize 'Label' values
-    df["Label"] = df["Label"].astype(str).str.strip().str.replace(r"\s+", " ", regex=True).str.upper()
-    logger.info("Normalized 'Label' values")
+    normalize_label_values(df)
 
     return df
 
@@ -101,20 +121,21 @@ def log_dataset_summary(df: pd.DataFrame) -> None:
     logger.info(f"Number of rows: {df.shape[0]}")
     logger.info(f"Number of columns: {df.shape[1]}")
 
-    if "Label" in df.columns:
-        class_counts = df["Label"].value_counts(dropna=False)
-        class_percentages = df["Label"].value_counts(normalize=True, dropna=False) * 100
+    class_counts = df["Label"].value_counts(dropna=False)
+    class_percentages = df["Label"].value_counts(normalize=True, dropna=False) * 100
 
-        logger.info(f"Number of classes in 'Label': {df['Label'].nunique(dropna=False)}")
-        logger.info("Class distribution (counts):")
-        for label, count in class_counts.items():
-            logger.info(f"  {label}: {count}")
+    logger.info(f"Number of classes in 'Label': {df['Label'].nunique(dropna=False)}")
+    logger.info("Class distribution (counts):")
+    for label, count in class_counts.items():
+        logger.info(f"{label}: {count}")
 
-        logger.info("Class distribution (percentages):")
-        for label, percentage in class_percentages.items():
-            logger.info(f"  {label}: {percentage:.4f}%")
-    else:
-        logger.warning("Column 'Label' not found, skipping class distribution logging")
+    logger.info("Class distribution (percentages):")
+    for label, percentage in class_percentages.items():
+        logger.info(f"{label}: {percentage:.4f}%")
+
+    logger.info("Unique labels:")
+    for label in sorted(df["Label"].unique()):
+        logger.info(f"  {label}")
 
 def main():
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -133,7 +154,7 @@ def main():
 
     output_path = OUTPUT_DIR / "cicids2017_preprocessed.csv"
     main_df.to_csv(output_path, index=False)
-    logger.info(f"Final dataset shape: {main_df.shape}")
+    log_dataset_summary(main_df)
     logger.info(f"Saved merged dataset to {output_path}")
 
 if __name__ == "__main__":
