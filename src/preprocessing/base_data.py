@@ -61,6 +61,7 @@ def clean_dataframe(df: pd.DataFrame) -> pd.DataFrame:
 
     #normalize 'Label' values
     df["Label"] = df["Label"].astype(str).str.strip().str.replace(r"\s+", " ", regex=True).str.upper()
+    logger.info("Normalized 'Label' values")
 
     return df
 
