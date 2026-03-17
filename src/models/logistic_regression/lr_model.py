@@ -1,6 +1,7 @@
 from pathlib import Path
 import yaml
 from lr_data import prepare_lr_data
+from utils.logger import setup_logger
 
 BASE_DIR = Path(__file__).resolve().parents[3]
 CONFIG_PATH = BASE_DIR / "config" / "logistic_regression.yaml"
@@ -13,6 +14,7 @@ def run_experiment() -> None:
     config = load_config(CONFIG_PATH)
     print(config)
     prepare_lr_data(config)
+    print("Done")
 
 def main():
     run_experiment()
