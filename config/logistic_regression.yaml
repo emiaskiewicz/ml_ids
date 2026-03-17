@@ -1,0 +1,47 @@
+experiment:
+  name: "lr_easy_binary"
+  random_state: 23
+
+data:
+  input_dir: "data/cleaned"
+  dataset_variant: "easy"
+  target_column: "Target"
+  label_column: "Label"
+
+split:
+  test_size: 0.2
+  val_size: 0.1
+  stratify: true
+  load_existing_split: false
+  save_split: true
+  force_regenerate_split: false
+  split_dir: "data/processed/logistic_regression/easy"
+
+features:
+  drop_columns:
+    - "Label"
+  remove_correlated_features: false
+  correlation_threshold: 0.95
+  use_feature_selection: false
+  feature_selection_method: null
+  selected_k_features: null
+
+preprocessing:
+  smote: false
+  scaling: false
+  scaler: "standard"
+
+model:
+  max_iter: 1000
+  solver: "lbfgs"
+  class_weight: null
+
+output:
+  output_dir: "outputs/logistic_regression/easy"
+  save_metrics: false
+  save_predictions: false
+  save_model: false
+
+logging:
+  log_path: "logs/logistic_regression/easy_exp1.log"
+  log_level: "INFO"
