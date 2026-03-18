@@ -1,7 +1,10 @@
 from pathlib import Path
 import pandas as pd
+import numpy as np
 from sklearn.model_selection import train_test_split
 from utils.logger import setup_logger
+import matplotlib.pyplot as plt
+import seaborn as sns
 
 BASE_DIR = Path(__file__).resolve().parents[3]
 
@@ -129,6 +132,32 @@ def separate_features_and_target(train_df: pd.DataFrame, val_df: pd.DataFrame, t
 
     return X_train, X_val, X_test, y_train, y_val, y_test
 
+def compute_correlation_matrix(df: pd.DataFrame, logger) -> pd.DataFrame:
+    logger.info("Computing correlation matrix")
+    corr_matrix = df.corr(numeric_only=True)
+    logger.info(f"Correlation matrix shape: {corr_matrix.shape}")
+    return corr_matrix
+
+def plot_correlation_matrix(corr_matrix: pd.DataFrame, output_dir: Path, filename: str, logger):
+    plt.figure(figsize=(12, 10))
+    sns.heatmap(corr_matrix, cmap="coolwarm", center=0)
+    path = output_dir / Path(filename)
+    plt.savefig(path, bbox_inches="tight")
+    plt.close()
+
+    logger.info(f"Saved correlation heatmap to {path}")
+
+def remove_correlated_features(df: pd.DataFrame, threshold: float, logger):
+    corr_matrix = df.corr(numeric_only=True).abs()
+    upper = corr_matrix.where(np.triu(np.ones(corr_matrix.shape), k=1).astype(bool))
+    to_drop = [col for col in upper.columns if any(upper[col] > threshold)]
+
+    logger.info(f"Removing {len(to_drop)} correlated features")
+    logger.info(f"Removed features: {to_drop}")
+    df_reduced = df.drop(columns=to_drop)
+
+    return df_reduced
+
 def prepare_lr_data(config: dict):
     logger = get_logger(config)
     logger.info(f"Preparing data for experiment: {config['experiment']['name']}")
@@ -139,24 +168,29 @@ def prepare_lr_data(config: dict):
     load_existing_split = config["split"]["load_existing_split"]
     save_split = config["split"]["save_split"]
     force_regenerate_split = config["split"]["force_regenerate_split"]
+    corr_threshold = config["features"]["correlation_threshold"]
+    output_dir = config["output"]["output_dir"]
+    remove_corr = config["features"]["remove_correlated_features"]
 
-    if force_regenerate_split:
-        logger.info(f"force_regenerate_split: true, creating new split")
-        dataset_path = get_dataset_path(config, logger)
-        df = load_dataset(dataset_path, logger)
-        df = drop_feature_columns(df, columns_to_drop, target_column, logger)
-        train_df, val_df, test_df = split_dataset(df, config, logger)
-
-        if save_split:
-            save_split_data(train_df, val_df, test_df, config, logger)
-    elif load_existing_split and split_files_exist(config):
+    if load_existing_split and split_files_exist(config):
         logger.info(f"Loading existing split data")
         train_df, val_df, test_df = load_existing_split(config, logger)
     else:
-        logger.info(f"Creating new split")
+        if force_regenerate_split:
+            logger.info(f"force_regenerate_split: true, creating new split")
+        else:
+            logger.info(f"Creating new split")
         dataset_path = get_dataset_path(config, logger)
         df = load_dataset(dataset_path, logger)
         df = drop_feature_columns(df, columns_to_drop, target_column, logger)
+        corr_martix=compute_correlation_matrix(df, logger)
+        plot_correlation_matrix(corr_martix, output_dir, "base_corr.jpg" ,logger)
+        if remove_corr:
+            logger.info(f"Removing correlated features")
+            df = remove_correlated_features(df, corr_threshold, logger)
+            corr_matrix = compute_correlation_matrix(df, logger)
+            plot_correlation_matrix(corr_matrix, output_dir, "corr_after_remove.jpg", logger)
+
         train_df, val_df, test_df = split_dataset(df, config, logger)
 
         if save_split:
