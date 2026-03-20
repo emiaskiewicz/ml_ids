@@ -6,6 +6,8 @@ from utils.logger import setup_logger
 import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.preprocessing import StandardScaler, MinMaxScaler, RobustScaler
+from sklearn.feature_selection import RFE, SelectKBest, f_classif
+from sklearn.linear_model import LogisticRegression
 
 BASE_DIR = Path(__file__).resolve().parents[3]
 
@@ -196,6 +198,50 @@ def scale_datasets(X_train: pd.DataFrame, X_val: pd.DataFrame, X_test: pd.DataFr
 
     return X_train_scaled, X_val_scaled, X_test_scaled
 
+def apply_feature_selection(X_train: pd.DataFrame, X_val: pd.DataFrame, X_test: pd.DataFrame, y_train: pd.Series,
+                            method: str, k_features: int, random_state: int, logger) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    #todo: zminic na raise
+    if k_features is None:
+        logger.critical("selected_k_features must be provided when feature selection is enabled")
+        exit(1)
+    if k_features <= 0:
+        logger.critical("selected_k_features must be greater than 0")
+        exit(1)
+    if k_features > X_train.shape[1]:
+        logger.critical(f"selected_k_features={k_features} is greater than the number of available features={X_train.shape[1]}")
+        exit(1)
+
+    method = method.lower()
+
+    if method == "rfe":
+        logger.info(f"Applying RFE with {k_features} selected features")
+        estimator = LogisticRegression(max_iter=1000, random_state=random_state)
+        selector = RFE(estimator=estimator, n_features_to_select=k_features)
+    elif method == "select_k_best":
+        logger.info(f"Applying SelectKBest with {k_features} selected features")
+        selector = SelectKBest(score_func=f_classif, k=k_features)
+    else:
+        #todo: tez zmienic
+        logger.critical(f"Unsupported feature selection method: {method}")
+        exit(1)
+
+    X_train_selected = selector.fit_transform(X_train, y_train)
+    X_val_selected = selector.transform(X_val)
+    X_test_selected = selector.transform(X_test)
+
+    selected_columns = X_train.columns[selector.get_support()].tolist()
+    logger.info(f"Selected {len(selected_columns)} features")
+    logger.info(f"Selected features: {selected_columns}")
+
+    X_train_selected = pd.DataFrame(X_train_selected, columns=selected_columns, index=X_train.index)
+    logger.info(f"X_train shape after feature selection: {X_train_selected.shape}")
+    X_val_selected = pd.DataFrame(X_val_selected, columns=selected_columns, index=X_val.index)
+    logger.info(f"X_val shape after feature selection: {X_val_selected.shape}")
+    X_test_selected = pd.DataFrame(X_test_selected, columns=selected_columns, index=X_test.index)
+    logger.info(f"X_test shape after feature selection: {X_test_selected.shape}")
+
+    return X_train_selected, X_val_selected, X_test_selected
+
 def prepare_lr_data(config: dict):
     logger = get_logger(config)
     logger.info(f"Preparing data for experiment: {config['experiment']['name']}")
@@ -211,6 +257,10 @@ def prepare_lr_data(config: dict):
     remove_corr = config["features"]["remove_correlated_features"]
     use_scaling = config["preprocessing"]["scaling"]
     scaler_name = config["preprocessing"]["scaler"]
+    use_feature_selection = config["features"]["use_feature_selection"]
+    feature_selection_method = config["features"]["feature_selection_method"]
+    selected_k_features = config["features"]["selected_k_features"]
+    random_state = config["experiment"]["random_state"]
 
     if load_existing_split and split_files_exist(config):
         logger.info(f"Loading existing split data")
@@ -245,5 +295,13 @@ def prepare_lr_data(config: dict):
         X_train, X_val, X_test = scale_datasets(X_train, X_val, X_test, scaler_name, logger)
     else:
         logger.info("Scaling is disabled")
+
+    if use_feature_selection:
+        logger.info("Feature selection is enabled")
+        X_train, X_val, X_test = apply_feature_selection(X_train, X_val, X_test, y_train,feature_selection_method,
+                                                         selected_k_features, random_state, logger)
+    else:
+        logger.info("Feature selection is disabled")
+
 
     return X_train, X_val, X_test, y_train, y_val, y_test
