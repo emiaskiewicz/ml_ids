@@ -5,6 +5,7 @@ from sklearn.model_selection import train_test_split
 from utils.logger import setup_logger
 import matplotlib.pyplot as plt
 import seaborn as sns
+from sklearn.preprocessing import StandardScaler, MinMaxScaler, RobustScaler
 
 BASE_DIR = Path(__file__).resolve().parents[3]
 
@@ -156,7 +157,44 @@ def remove_correlated_features(df: pd.DataFrame, threshold: float, logger):
     logger.info(f"Removed features: {to_drop}")
     df_reduced = df.drop(columns=to_drop)
 
-    return df_reduced
+    return df_reduced, to_drop
+
+def get_scaler(scaler_name: str, logger):
+    scaler_name = scaler_name.lower()
+
+    if scaler_name == "standard":
+        logger.info("Using StandardScaler")
+        return StandardScaler()
+    elif scaler_name == "minmax":
+        logger.info("Using MinMaxScaler")
+        return MinMaxScaler()
+    elif scaler_name == "robust":
+        logger.info("Using RobustScaler")
+        return RobustScaler()
+    else:
+        #todo: zmienic na raise pozniej
+        logger.critical(f"Unsupported scaler: {scaler_name}")
+        exit(1)
+
+def scale_datasets(X_train: pd.DataFrame, X_val: pd.DataFrame, X_test: pd.DataFrame, scaler_name: str,
+                   logger) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    scaler = get_scaler(scaler_name, logger)
+
+    logger.info("Fitting scaler on X_train")
+    X_train_scaled = scaler.fit_transform(X_train)
+
+    logger.info("Transforming X_val and X_test with fitted scaler")
+    X_val_scaled = scaler.transform(X_val)
+    X_test_scaled = scaler.transform(X_test)
+
+    X_train_scaled = pd.DataFrame(X_train_scaled, columns=X_train.columns, index=X_train.index)
+    logger.info(f"Scaled X_train shape: {X_train_scaled.shape}")
+    X_val_scaled = pd.DataFrame(X_val_scaled, columns=X_val.columns, index=X_val.index)
+    logger.info(f"Scaled X_val shape: {X_val_scaled.shape}")
+    X_test_scaled = pd.DataFrame(X_test_scaled, columns=X_test.columns, index=X_test.index)
+    logger.info(f"Scaled X_test shape: {X_test_scaled.shape}")
+
+    return X_train_scaled, X_val_scaled, X_test_scaled
 
 def prepare_lr_data(config: dict):
     logger = get_logger(config)
@@ -171,10 +209,13 @@ def prepare_lr_data(config: dict):
     corr_threshold = config["features"]["correlation_threshold"]
     output_dir = config["output"]["output_dir"]
     remove_corr = config["features"]["remove_correlated_features"]
+    use_scaling = config["preprocessing"]["scaling"]
+    scaler_name = config["preprocessing"]["scaler"]
 
     if load_existing_split and split_files_exist(config):
         logger.info(f"Loading existing split data")
-        train_df, val_df, test_df = load_existing_split(config, logger)
+        train_df, val_df, test_df = load_existing_split_data(config, logger)
+        X_train, X_val, X_test, y_train, y_val, y_test = separate_features_and_target(train_df, val_df, test_df, target_column, logger)
     else:
         if force_regenerate_split:
             logger.info(f"force_regenerate_split: true, creating new split")
@@ -183,17 +224,26 @@ def prepare_lr_data(config: dict):
         dataset_path = get_dataset_path(config, logger)
         df = load_dataset(dataset_path, logger)
         df = drop_feature_columns(df, columns_to_drop, target_column, logger)
-        corr_martix=compute_correlation_matrix(df, logger)
-        plot_correlation_matrix(corr_martix, output_dir, "base_corr.jpg" ,logger)
-        if remove_corr:
-            logger.info(f"Removing correlated features")
-            df = remove_correlated_features(df, corr_threshold, logger)
-            corr_matrix = compute_correlation_matrix(df, logger)
-            plot_correlation_matrix(corr_matrix, output_dir, "corr_after_remove.jpg", logger)
-
         train_df, val_df, test_df = split_dataset(df, config, logger)
-
         if save_split:
             save_split_data(train_df, val_df, test_df, config, logger)
 
-    return separate_features_and_target(train_df, val_df, test_df, target_column, logger)
+        X_train, X_val, X_test, y_train, y_val, y_test = separate_features_and_target(train_df, val_df, test_df, target_column, logger)
+
+    corr_matrix=compute_correlation_matrix(X_train, logger)
+    plot_correlation_matrix(corr_matrix, output_dir, "base_corr.jpg" ,logger)
+    if remove_corr:
+        logger.info(f"Removing correlated features")
+        X_train, to_drop = remove_correlated_features(X_train, corr_threshold, logger)
+        X_val.drop(columns=to_drop, inplace=True)
+        X_test.drop(columns=to_drop, inplace=True)
+        corr_matrix = compute_correlation_matrix(X_train, logger)
+        plot_correlation_matrix(corr_matrix, output_dir, "corr_after_remove.jpg", logger)
+
+    if use_scaling:
+        logger.info("Scaling is enabled")
+        X_train, X_val, X_test = scale_datasets(X_train, X_val, X_test, scaler_name, logger)
+    else:
+        logger.info("Scaling is disabled")
+
+    return X_train, X_val, X_test, y_train, y_val, y_test
