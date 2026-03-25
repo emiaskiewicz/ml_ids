@@ -109,7 +109,7 @@ def split_files_exist(config: dict) -> bool:
     return train_path.exists() and val_path.exists() and test_path.exists()
 
 def get_prepared_data_paths(data_cfg: dict) -> tuple[Path,Path,Path,Path,Path,Path]:
-    prepared_dir = BASE_DIR / data_cfg["prepared_data_path"]
+    prepared_dir = BASE_DIR / data_cfg["prepared_data_dir"]
     return (prepared_dir / "X_train.csv", prepared_dir / "X_val.csv", prepared_dir / "X_test.csv",
             prepared_dir / "y_train.csv", prepared_dir / "y_val.csv", prepared_dir / "y_test.csv")
 
@@ -137,7 +137,9 @@ def load_existing_prepared_data(data_cfg: dict, logger) -> tuple[pd.DataFrame, p
 
 def save_prepared_data(data_cfg: dict, X_train: pd.DataFrame, X_val: pd.DataFrame, X_test: pd.DataFrame,
                        y_train: pd.Series, y_val: pd.Series, y_test: pd.Series, logger) -> None:
-    prepared_dir = BASE_DIR / data_cfg["prepared_data_path"]
+    prepared_dir = BASE_DIR / data_cfg["prepared_data_dir"]
+    prepared_dir.mkdir(parents=True, exist_ok=True)
+
     X_train_path, X_val_path, X_test_path, y_train_path, y_val_path, y_test_path = get_prepared_data_paths(data_cfg)
     prepared_dir.mkdir(parents=True, exist_ok=True)
 
@@ -289,11 +291,22 @@ def apply_feature_selection(X_train: pd.DataFrame, X_val: pd.DataFrame, X_test: 
 
     return X_train_selected, X_val_selected, X_test_selected
 
+def apply_smote(X_train: pd.DataFrame, y_train: pd.Series, random_state: int, logger):
+    logger.info("Applying SMOTE to training data")
+    logger.info(f"Before SMOTE: X_train shape: {X_train.shape}, y_train shape: {y_train.shape}")
+
+    smote = SMOTE(random_state=random_state)
+    X_resampled, y_resampled = smote.fit_resample(X_train, y_train)
+
+    logger.info(f"After SMOTE: X_train shape: {X_resampled.shape}, y_train shape: {y_resampled.shape}")
+    return X_resampled, y_resampled
+
 def prepare_lr_data(config: dict):
     logger = get_logger(config)
     logger.info(f"Preparing data for experiment: {config['experiment']['name']}")
     logger.info(f"Config: {config}")
 
+    exp_cfg = config["experiment"]
     data_cfg = config["data"]
     output_cfg = config["output"]
     features_cfg = config["features"]
@@ -344,6 +357,12 @@ def prepare_lr_data(config: dict):
                                                          features_cfg["selected_k_features"], config["experiment"]["random_state"], logger)
     else:
         logger.info("Feature selection is disabled")
+
+    if prep_cfg["smote"]:
+        logger.info("SMOTE is enabled")
+        logger.info(f"Class distribution before SMOTE:\n{y_train.value_counts()}")
+        X_train, y_train = apply_smote(X_train, y_train, exp_cfg["random_state"], logger)
+        logger.info(f"Class distribution after SMOTE:\n{y_train.value_counts()}")
 
     if data_cfg["save_prepared_data"]:
         logger.info("Saving prepared data")
