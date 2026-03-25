@@ -7,6 +7,9 @@ data:
   dataset_variant: "easy"
   target_column: "Target"
   label_column: "Label"
+  load_existing_prepared_data: false
+  save_prepared_data: true
+  prepared_data_dir: "data/prepared/logistic_regression/easy"
 
 split:
   test_size: 0.2
@@ -20,15 +23,15 @@ split:
 features:
   drop_columns:
     - "Label"
-  remove_correlated_features: false
+  remove_correlated_features: true
   correlation_threshold: 0.95
-  use_feature_selection: false
-  feature_selection_method: null
-  selected_k_features: null
+  use_feature_selection: true
+  feature_selection_method: "rfe"
+  selected_k_features: 40
 
 preprocessing:
   smote: false
-  scaling: false
+  scaling: true
   scaler: "standard"
 
 model:
