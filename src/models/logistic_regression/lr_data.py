@@ -8,6 +8,7 @@ import seaborn as sns
 from sklearn.preprocessing import StandardScaler, MinMaxScaler, RobustScaler
 from sklearn.feature_selection import RFE, SelectKBest, f_classif
 from sklearn.linear_model import LogisticRegression
+from imblearn.over_sampling import SMOTE
 
 BASE_DIR = Path(__file__).resolve().parents[3]
 
