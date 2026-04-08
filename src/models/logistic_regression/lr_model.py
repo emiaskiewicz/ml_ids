@@ -105,7 +105,9 @@ def save_to_txt(metrics: dict, exp_name: str, path: Path):
         f"F1-score: {metrics['f1']:.4f}",
         f"ROC-AUC: {metrics['roc_auc']:.4f}" if metrics["roc_auc"] is not None else "ROC-AUC: None",
         f"Average Precision: {metrics['average_precision']:.4f}" if metrics["average_precision"] is not None else "Average Precision: None",
+        "",
         "Confusion Matrix:", str(metrics["confusion_matrix"]),
+        "",
         "Classification Report:",metrics["classification_report"],
     ]
 
@@ -130,7 +132,8 @@ def save_to_json(metrics: dict, exp_name: str, path: Path):
         json.dump(json_ready, file, indent=4, ensure_ascii=False)
 
 def save_metrics(metrics: dict, config: dict, logger: logging.Logger) -> None:
-    path = BASE_DIR / config["outputs"]["output_dir"]
+    path = BASE_DIR / config["output"]["output_dir"]
+    path.mkdir(parents=True, exist_ok=True)
     split_name = metrics["split_name"].lower()
 
     txt_path = path / f"{split_name}_metrics.txt"
@@ -141,6 +144,77 @@ def save_metrics(metrics: dict, config: dict, logger: logging.Logger) -> None:
 
     save_to_json(metrics, config["experiment"]["name"], json_path)
     logger.info(f"Saved metrics JSON to: {json_path}")
+
+def plot_confusion_matrix(metrics: dict, config: dict, logger: logging.Logger) -> None:
+    split_name = metrics["split_name"].lower()
+    save_path = BASE_DIR / config["output"]["output_dir"] / f"{split_name}_confusion_matrix.jpg"
+    save_path.parent.mkdir(parents=True, exist_ok=True)
+
+    fig, ax = plt.subplots(figsize=(6, 5))
+    ConfusionMatrixDisplay.from_predictions(
+        y_true=metrics["y_true"],
+        y_pred=metrics["y_pred"],
+        display_labels=["BENIGN", "ATTACK"],
+        cmap="Blues",
+        ax=ax
+    )
+    ax.set_title(f"{metrics['split_name']} - Confusion Matrix")
+    plt.tight_layout()
+    plt.savefig(save_path, dpi=300, bbox_inches="tight")
+    plt.close(fig)
+
+    logger.info(f"Saved confusion matrix plot to: {save_path}")
+
+def plot_roc_curve(metrics: dict, config: dict, logger: logging.Logger) -> None:
+    if metrics["y_proba"] is None:
+        logger.warning("Skipping ROC curve: probabilities not available")
+        return
+
+    split_name = metrics["split_name"].lower()
+    save_path = BASE_DIR / config["output"]["output_dir"] / f"{split_name}_roc_curve.jpg"
+    save_path.parent.mkdir(parents=True, exist_ok=True)
+
+    fig, ax = plt.subplots(figsize=(6, 5))
+    RocCurveDisplay.from_predictions(
+        y_true=metrics["y_true"],
+        y_score=metrics["y_proba"],
+        ax=ax,
+        name=f"{config['experiment']['name']} ({metrics['split_name']})"
+    )
+    ax.set_title(f"{metrics['split_name']} - ROC Curve")
+    plt.tight_layout()
+    plt.savefig(save_path, dpi=300, bbox_inches="tight")
+    plt.close(fig)
+
+    logger.info(f"Saved ROC curve plot to: {save_path}")
+
+def plot_precision_recall_curve(metrics: dict, config: dict, logger: logging.Logger) -> None:
+    if metrics["y_proba"] is None:
+        logger.warning("Skipping Precision-Recall curve: probabilities not available")
+        return
+
+    split_name = metrics["split_name"].lower()
+    save_path = BASE_DIR / config["output"]["output_dir"] / f"{split_name}_pr_curve.jpg"
+    save_path.parent.mkdir(parents=True, exist_ok=True)
+
+    fig, ax = plt.subplots(figsize=(6, 5))
+    PrecisionRecallDisplay.from_predictions(
+        y_true=metrics["y_true"],
+        y_score=metrics["y_proba"],
+        ax=ax,
+        name=f"{config['experiment']['name']} ({metrics['split_name']})"
+    )
+    ax.set_title(f"{metrics['split_name']} - Precision-Recall Curve")
+    plt.tight_layout()
+    plt.savefig(save_path, dpi=300, bbox_inches="tight")
+    plt.close(fig)
+
+    logger.info(f"Saved Precision-Recall curve plot to: {save_path}")
+
+def save_visualizations(metrics: dict, config: dict, logger: logging.Logger) -> None:
+    plot_confusion_matrix(metrics, config, logger)
+    plot_roc_curve(metrics, config, logger)
+    plot_precision_recall_curve(metrics, config, logger)
 
 def save_model(config: dict, logger: logging.Logger) -> dict:
     pass
@@ -160,7 +234,11 @@ def main() -> None:
 
     val_metrics = evaluate_model(model, X_val, y_val, "Validation", logger)
 
-    print(val_metrics)
+    if config["output"]["save_metrics"]:
+        save_metrics(val_metrics, config, logger)
+
+    if config["output"]["save_plots"]:
+        save_visualizations(val_metrics, config, logger)
 
 if __name__ == "__main__":
     main()
