@@ -3,8 +3,12 @@ from pathlib import Path
 import yaml
 from lr_data import prepare_lr_data, get_logger
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, roc_auc_score, confusion_matrix, classification_report
+from sklearn.metrics import (accuracy_score, precision_score, recall_score, f1_score, roc_auc_score,
+                             confusion_matrix, classification_report, average_precision_score,
+                             ConfusionMatrixDisplay, RocCurveDisplay, PrecisionRecallDisplay)
 import matplotlib.pyplot as plt
+import json
+
 
 BASE_DIR = Path(__file__).resolve().parents[3]
 CONFIG_PATH = BASE_DIR / "config" / "logistic_regression.yaml"
@@ -58,12 +62,8 @@ def evaluate_model(model, X, y, split_name: str, logger) -> dict:
     precision = precision_score(y, y_pred, zero_division=0)
     recall = recall_score(y, y_pred, zero_division=0)
     f1 = f1_score(y, y_pred, zero_division=0)
-
-    if y_proba is not None:
-        roc_auc = roc_auc_score(y, y_proba)
-    else:
-        roc_auc = None
-
+    roc_auc = roc_auc_score(y, y_proba) if y_proba is not None else None
+    avg_precision = average_precision_score(y, y_proba) if y_proba is not None else None
     cm = confusion_matrix(y, y_pred)
     report = classification_report(y, y_pred, zero_division=0)
 
@@ -74,22 +74,73 @@ def evaluate_model(model, X, y, split_name: str, logger) -> dict:
 
     if roc_auc is not None:
         logger.info(f"{split_name} ROC-AUC: {roc_auc:.4f}")
+    if avg_precision is not None:
+        logger.info(f"{split_name} Average Precision: {avg_precision:.4f}")
 
     logger.info(f"{split_name} Confusion Matrix:\n{cm}")
     logger.info(f"{split_name} Classification Report:\n{report}")
 
     return {
+        "split_name": split_name,
         "accuracy": accuracy,
         "precision": precision,
         "recall": recall,
         "f1": f1,
         "roc_auc": roc_auc,
+        "average_precision": avg_precision,
         "confusion_matrix": cm,
-        "classification_report": report
+        "classification_report": report,
+        "y_true": y.tolist() if hasattr(y, "tolist") else list(y),
+        "y_pred": y_pred.tolist(),
+        "y_proba": y_proba.tolist() if y_proba is not None else None,
     }
 
-def save_metrics(config: dict, logger: logging.Logger) -> dict:
-    pass
+def save_to_txt(metrics: dict, exp_name: str, path: Path):
+    txt_content = [
+        f"Experiment: {exp_name}",
+        f"Split: {metrics['split_name']}",
+        f"Accuracy: {metrics['accuracy']:.4f}",
+        f"Precision: {metrics['precision']:.4f}",
+        f"Recall: {metrics['recall']:.4f}",
+        f"F1-score: {metrics['f1']:.4f}",
+        f"ROC-AUC: {metrics['roc_auc']:.4f}" if metrics["roc_auc"] is not None else "ROC-AUC: None",
+        f"Average Precision: {metrics['average_precision']:.4f}" if metrics["average_precision"] is not None else "Average Precision: None",
+        "Confusion Matrix:", str(metrics["confusion_matrix"]),
+        "Classification Report:",metrics["classification_report"],
+    ]
+
+    with path.open("w", encoding="utf-8") as file:
+        file.write("\n".join(txt_content))
+
+def save_to_json(metrics: dict, exp_name: str, path: Path):
+    json_ready = {
+        "experiment_name": exp_name,
+        "split_name": metrics["split_name"],
+        "accuracy": metrics["accuracy"],
+        "precision": metrics["precision"],
+        "recall": metrics["recall"],
+        "f1": metrics["f1"],
+        "roc_auc": metrics["roc_auc"],
+        "average_precision": metrics["average_precision"],
+        "confusion_matrix": metrics["confusion_matrix"].tolist(),
+        "classification_report": metrics["classification_report"],
+    }
+
+    with path.open("w", encoding="utf-8") as file:
+        json.dump(json_ready, file, indent=4, ensure_ascii=False)
+
+def save_metrics(metrics: dict, config: dict, logger: logging.Logger) -> None:
+    path = BASE_DIR / config["outputs"]["output_dir"]
+    split_name = metrics["split_name"].lower()
+
+    txt_path = path / f"{split_name}_metrics.txt"
+    json_path = path / f"{split_name}_metrics.json"
+
+    save_to_txt(metrics, config["experiment"]["name"], txt_path)
+    logger.info(f"Saved metrics to: {txt_path}")
+
+    save_to_json(metrics, config["experiment"]["name"], json_path)
+    logger.info(f"Saved metrics JSON to: {json_path}")
 
 def save_model(config: dict, logger: logging.Logger) -> dict:
     pass
