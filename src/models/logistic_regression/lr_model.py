@@ -4,6 +4,7 @@ import yaml
 from lr_data import prepare_lr_data, get_logger
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, roc_auc_score, confusion_matrix, classification_report
+import matplotlib.pyplot as plt
 
 BASE_DIR = Path(__file__).resolve().parents[3]
 CONFIG_PATH = BASE_DIR / "config" / "logistic_regression.yaml"
@@ -11,6 +12,15 @@ CONFIG_PATH = BASE_DIR / "config" / "logistic_regression.yaml"
 def load_config(config_path: Path) -> dict:
     with config_path.open("r", encoding="utf-8") as file:
         return yaml.safe_load(file)
+
+def log_config(config: dict, logger) -> None:
+    config_text = yaml.safe_dump(
+        config,
+        sort_keys=False,
+        allow_unicode=True,
+        default_flow_style=False
+    )
+    logger.info(f"Loaded configuration:\n{config_text}")
 
 def build_model(config: dict, logger) -> LogisticRegression:
     model_cfg = config["model"]
@@ -87,6 +97,7 @@ def save_model(config: dict, logger: logging.Logger) -> dict:
 def main() -> None:
     config = load_config(CONFIG_PATH)
     logger = get_logger(config)
+    log_config(config, logger)
 
     logger.info("Start experiment")
     X_train, X_val, X_test, y_train, y_val, y_test = prepare_lr_data(config)
