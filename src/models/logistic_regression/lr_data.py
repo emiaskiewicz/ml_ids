@@ -146,6 +146,7 @@ def plot_correlation_matrix(corr_matrix: pd.DataFrame, output_dir: Path, filenam
     plt.figure(figsize=(12, 10))
     sns.heatmap(corr_matrix, cmap="coolwarm", center=0)
     path = BASE_DIR / output_dir / Path(filename)
+    path.parent.mkdir(parents=True, exist_ok=True)
     plt.savefig(path, bbox_inches="tight")
     plt.close()
 
