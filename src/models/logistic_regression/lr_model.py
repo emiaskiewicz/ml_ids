@@ -8,7 +8,9 @@ from sklearn.metrics import (accuracy_score, precision_score, recall_score, f1_s
                              ConfusionMatrixDisplay, RocCurveDisplay, PrecisionRecallDisplay)
 import matplotlib.pyplot as plt
 import json
+import os
 
+os.environ["LOKY_MAX_CPU_COUNT"] = "8"
 
 BASE_DIR = Path(__file__).resolve().parents[3]
 CONFIG_PATH = BASE_DIR / "config" / "logistic_regression.yaml"
