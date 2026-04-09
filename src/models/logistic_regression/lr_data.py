@@ -145,7 +145,7 @@ def compute_correlation_matrix(df: pd.DataFrame, logger) -> pd.DataFrame:
 def plot_correlation_matrix(corr_matrix: pd.DataFrame, output_dir: Path, filename: str, logger):
     plt.figure(figsize=(12, 10))
     sns.heatmap(corr_matrix, cmap="coolwarm", center=0)
-    path = output_dir / Path(filename)
+    path = BASE_DIR / output_dir / Path(filename)
     plt.savefig(path, bbox_inches="tight")
     plt.close()
 
@@ -273,8 +273,10 @@ def prepare_lr_data(config: dict):
         logger.info(f"Creating new split")
         dataset_path = get_dataset_path(config, logger)
         df = load_dataset(dataset_path, logger)
-        df = drop_feature_columns(df, features_cfg["drop_columns"], data_cfg["target_column"], logger)
         train_df, val_df, test_df = split_dataset(df, config, logger)
+        train_df = drop_feature_columns(train_df, features_cfg["drop_columns"], data_cfg["target_column"], logger)
+        val_df = drop_feature_columns(val_df, features_cfg["drop_columns"], data_cfg["target_column"], logger)
+        test_df = drop_feature_columns(test_df, features_cfg["drop_columns"], data_cfg["target_column"], logger)
         if split_cfg["save_split"]:
             save_split_data(train_df, val_df, test_df, config, logger)
 
