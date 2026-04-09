@@ -1,4 +1,5 @@
 import logging
+import winsound
 from pathlib import Path
 import yaml
 from lr_data import prepare_lr_data, get_logger
@@ -241,6 +242,8 @@ def main() -> None:
 
     if config["output"]["save_plots"]:
         save_visualizations(val_metrics, config, logger)
+
+    winsound.Beep(2500,1000)
 
 if __name__ == "__main__":
     main()
