@@ -108,54 +108,6 @@ def split_files_exist(config: dict) -> bool:
     train_path, val_path, test_path = get_split_paths(config)
     return train_path.exists() and val_path.exists() and test_path.exists()
 
-def get_prepared_data_paths(data_cfg: dict) -> tuple[Path,Path,Path,Path,Path,Path]:
-    prepared_dir = BASE_DIR / data_cfg["prepared_data_dir"]
-    return (prepared_dir / "X_train.csv", prepared_dir / "X_val.csv", prepared_dir / "X_test.csv",
-            prepared_dir / "y_train.csv", prepared_dir / "y_val.csv", prepared_dir / "y_test.csv")
-
-def prepared_data_exists(data_cfg: dict) -> bool:
-    paths = get_prepared_data_paths(data_cfg)
-    return all(path.exists() for path in paths)
-
-def load_existing_prepared_data(data_cfg: dict, logger) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.Series, pd.Series, pd.Series]:
-    X_train_path, X_val_path, X_test_path, y_train_path, y_val_path, y_test_path = get_prepared_data_paths(data_cfg)
-    logger.info("Loading existing prepared data")
-    X_train = pd.read_csv(X_train_path, memory_map=True, low_memory=False)
-    logger.info(f"Loaded X_train prepared data shape: {X_train.shape}")
-    X_val = pd.read_csv(X_val_path, memory_map=True, low_memory=False)
-    logger.info(f"Loaded X_val prepared data shape: {X_val.shape}")
-    X_test = pd.read_csv(X_test_path, memory_map=True, low_memory=False)
-    logger.info(f"Loaded X_test prepared data shape: {X_test.shape}")
-    y_train = pd.read_csv(y_train_path, memory_map=True, low_memory=False).squeeze("columns")
-    logger.info(f"Loaded y_train prepared data shape: {y_train.shape}")
-    y_val = pd.read_csv(y_val_path, memory_map=True, low_memory=False).squeeze("columns")
-    logger.info(f"Loaded y_val prepared data shape: {y_val.shape}")
-    y_test = pd.read_csv(y_test_path, memory_map=True, low_memory=False).squeeze("columns")
-    logger.info(f"Loaded y_test prepared data shape: {y_test.shape}")
-
-    return X_train, X_val, X_test, y_train, y_val, y_test
-
-def save_prepared_data(data_cfg: dict, X_train: pd.DataFrame, X_val: pd.DataFrame, X_test: pd.DataFrame,
-                       y_train: pd.Series, y_val: pd.Series, y_test: pd.Series, logger) -> None:
-    prepared_dir = BASE_DIR / data_cfg["prepared_data_dir"]
-    prepared_dir.mkdir(parents=True, exist_ok=True)
-
-    X_train_path, X_val_path, X_test_path, y_train_path, y_val_path, y_test_path = get_prepared_data_paths(data_cfg)
-    prepared_dir.mkdir(parents=True, exist_ok=True)
-
-    X_train.to_csv(X_train_path, index=False)
-    logger.info(f"Saved X_train prepared data to: {X_train_path}")
-    X_val.to_csv(X_val_path, index=False)
-    logger.info(f"Saved X_val prepared data to: {X_val_path}")
-    X_test.to_csv(X_test_path, index=False)
-    logger.info(f"Saved X_test prepared data to: {X_test_path}")
-    y_train.to_csv(y_train_path, index=False)
-    logger.info(f"Saved y_train prepared data to: {y_train_path}")
-    y_val.to_csv(y_val_path, index=False)
-    logger.info(f"Saved y_val prepared data to: {y_val_path}")
-    y_test.to_csv(y_test_path, index=False)
-    logger.info(f"Saved y_test prepared data to: {y_test_path}")
-
 def drop_feature_columns(df: pd.DataFrame, columns_to_drop: list[str], target_column: str, logger) -> pd.DataFrame:
     valid_columns_to_drop = [col for col in columns_to_drop if col in df.columns and col != target_column]
 
@@ -313,19 +265,12 @@ def prepare_lr_data(config: dict):
     split_cfg = config["split"]
     prep_cfg = config["preprocessing"]
 
-    if data_cfg["load_existing_prepared_data"] and prepared_data_exists(data_cfg):
-        logger.info(f"Loading existing prepared data")
-        return load_existing_prepared_data(data_cfg, logger)
-
     if split_cfg["load_existing_split"] and split_files_exist(config):
         logger.info(f"Loading existing split data")
         train_df, val_df, test_df = load_existing_split_data(config, logger)
         X_train, X_val, X_test, y_train, y_val, y_test = separate_features_and_target(train_df, val_df, test_df, data_cfg["target_column"], logger)
     else:
-        if split_cfg["force_regenerate_split"]:
-            logger.info(f"force_regenerate_split: true, creating new split")
-        else:
-            logger.info(f"Creating new split")
+        logger.info(f"Creating new split")
         dataset_path = get_dataset_path(config, logger)
         df = load_dataset(dataset_path, logger)
         df = drop_feature_columns(df, features_cfg["drop_columns"], data_cfg["target_column"], logger)
@@ -363,9 +308,5 @@ def prepare_lr_data(config: dict):
         logger.info(f"Class distribution before SMOTE:\n{y_train.value_counts()}")
         X_train, y_train = apply_smote(X_train, y_train, exp_cfg["random_state"], logger)
         logger.info(f"Class distribution after SMOTE:\n{y_train.value_counts()}")
-
-    if data_cfg["save_prepared_data"]:
-        logger.info("Saving prepared data")
-        save_prepared_data(data_cfg, X_train, X_val, X_test, y_train, y_val, y_test, logger)
 
     return X_train, X_val, X_test, y_train, y_val, y_test

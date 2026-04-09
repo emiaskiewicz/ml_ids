@@ -1,15 +1,17 @@
-root
+utils
 |___ .gitignore
 |___ README.md
 |___ config
 |    |___ base.yaml
+|    |___ logistic_regression.yaml
 |___ data
 |    |___ cleaned
 |    |    |___ .gitkeep
+|    |    |___ cicids2017_easy.csv
+|    |    |___ cicids2017_hard.csv
+|    |    |___ cicids2017_medium.csv
 |    |    |___ cicids2017_preprocessed.csv
 |    |    |___ cicids2017_targets.csv
-|    |___ processed
-|    |    |___ .gitkeep
 |    |___ raw
 |    |    |___ .gitkeep
 |    |    |___ Benign-Monday-WorkingHours.pcap_ISCX.csv
@@ -20,20 +22,49 @@ root
 |    |    |___ Infiltration-Thursday-WorkingHours-Afternoon.pcap_ISCX.csv
 |    |    |___ Portscan-Friday-WorkingHours-Afternoon.pcap_ISCX.csv
 |    |    |___ WebAttacks-Thursday-WorkingHours-Morning.pcap_ISCX.csv
+|    |___ split
+|    |    |___ easy
 |___ logs
 |    |___ base_data_preprocessing.log
+|    |___ logistic_regression
+|    |    |___ easy
+|    |    |    |___ LR-001.log
+|    |    |    |___ LR-002.log
 |    |___ target_data_preprocessing.log
+|    |___ variants_split_preprocessing.log
 |___ notebooks
 |    |___ inspect_raw_data.ipynb
 |___ outputs
 |    |___ .gitkeep
+|    |___ logistic_regression
+|    |    |___ easy
+|    |    |    |___ LR-001
+|    |    |    |    |___ base_corr.jpg
+|    |    |    |    |___ validation_confusion_matrix.jpg
+|    |    |    |    |___ validation_metrics.json
+|    |    |    |    |___ validation_metrics.txt
+|    |    |    |    |___ validation_pr_curve.jpg
+|    |    |    |    |___ validation_roc_curve.jpg
+|    |    |    |___ LR-002
+|    |    |    |    |___ base_corr.jpg
+|    |    |    |    |___ validation_confusion_matrix.jpg
+|    |    |    |    |___ validation_metrics.json
+|    |    |    |    |___ validation_metrics.txt
+|    |    |    |    |___ validation_pr_curve.jpg
+|    |    |    |    |___ validation_roc_curve.jpg
+|    |    |    |___ LR-003
 |___ requirements.txt
 |___ src
 |    |___ main.py
+|    |___ models
+|    |    |___ logistic_regression
+|    |    |    |___ lr_data.py
+|    |    |    |___ lr_model.py
 |    |___ preprocessing
 |    |    |___ base_data.py
 |    |    |___ preprocess.md
 |    |    |___ target_data.py
+|    |    |___ variants_split.py
 |    |___ utils
 |    |    |___ logger.py
 |    |    |___ make_tree.py

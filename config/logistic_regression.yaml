@@ -1,5 +1,5 @@
 experiment:
-  name: "LR-001e"
+  name: "LR-003e"
   random_state: 23
 
 data:
@@ -7,9 +7,6 @@ data:
   dataset_variant: "easy"
   target_column: "Target"
   label_column: "Label"
-  load_existing_prepared_data: false
-  save_prepared_data: false
-  prepared_data_dir: "data/prepared/logistic_regression/easy/LR-001"
 
 split:
   test_size: 0.2
@@ -17,22 +14,21 @@ split:
   stratify: true
   load_existing_split: false
   save_split: true
-  force_regenerate_split: false
-  split_dir: "data/processed/logistic_regression/easy/LR-001"
+  split_dir: "data/split/easy/"
 
 features:
   drop_columns:
     - "Label"
-  remove_correlated_features: false
+  remove_correlated_features: true
   correlation_threshold: 0.95
   use_feature_selection: false
-  feature_selection_method: "rfe"
+  feature_selection_method: null
   selected_k_features: 40
 
 preprocessing:
   smote: false
   scaling: false
-  scaler: "standard"
+  scaler: null
 
 model:
   max_iter: 1000
@@ -40,12 +36,12 @@ model:
   class_weight: null
 
 output:
-  output_dir: "outputs/logistic_regression/easy/LR-001"
+  output_dir: "outputs/logistic_regression/easy/LR-003"
   save_metrics: true
   save_plots: true
   save_predictions: false
   save_model: false
 
 logging:
-  log_path: "logs/logistic_regression/easy/LR-001.log"
+  log_path: "logs/logistic_regression/easy/LR-003.log"
   log_level: "INFO"
