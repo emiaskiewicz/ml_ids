@@ -1,5 +1,5 @@
 experiment:
-  name: "LR-003e"
+  name: "LR-015e-tune"
   random_state: 23
 
 data:
@@ -12,8 +12,8 @@ split:
   test_size: 0.2
   val_size: 0.1
   stratify: true
-  load_existing_split: false
-  save_split: true
+  load_existing_split: true
+  save_split: false
   split_dir: "data/split/easy/"
 
 features:
@@ -21,27 +21,42 @@ features:
     - "Label"
   remove_correlated_features: true
   correlation_threshold: 0.95
-  use_feature_selection: false
-  feature_selection_method: null
+  use_feature_selection: true
+  feature_selection_method: "select_k_best" #"rfe"
   selected_k_features: 40
 
 preprocessing:
   smote: false
-  scaling: false
-  scaler: null
+  scaling: true
+  scaler: "standard"
 
 model:
   max_iter: 1000
   solver: "lbfgs"
   class_weight: null
 
+tuning_stage_1:
+  enabled: true
+  metric: "f1"
+  C_values: [ 0.3, 1.0, 3.0, 10.0 ]
+  class_weight_values:
+    - null
+    - "balanced"
+
+tuning_stage_2:
+  enabled: true
+  metric: "f1"
+  threshold_values: [ 0.35, 0.40, 0.45, 0.50, 0.55, 0.60, 0.65 ]
+
 output:
-  output_dir: "outputs/logistic_regression/easy/LR-003"
+  output_dir: "outputs/logistic_regression/easy/LR-015-tune"
   save_metrics: true
   save_plots: true
   save_predictions: false
   save_model: false
+  save_tuning_results: true
+  save_best_config: true
 
 logging:
-  log_path: "logs/logistic_regression/easy/LR-003.log"
+  log_path: "logs/logistic_regression/easy/LR-015-tune.log"
   log_level: "INFO"
