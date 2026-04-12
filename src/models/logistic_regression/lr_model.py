@@ -236,7 +236,7 @@ def calculate_binary_metrics(y_true, y_pred,y_proba) -> dict[str, float]:
         "average_precision": average_precision_score(y_true, y_proba),
     }
 
-def tuning_stage_1(X_train, y_train, X_val, y_val, config: dict, logger) -> tuple[dict, LogisticRegression, list[float], pd.DataFrame]:
+def tuning_stage_1(X_train, y_train, X_val, y_val, config: dict, logger) -> tuple[dict, LogisticRegression, pd.DataFrame]:
     tuning_cfg = config["tuning_stage_1"]
     model_cfg = config["model"]
 
@@ -307,7 +307,7 @@ def tuning_stage_1(X_train, y_train, X_val, y_val, config: dict, logger) -> tupl
     logger.info(f"Stage 1 best params: {best_params}")
     logger.info(f"Stage 1 best {metric_name}: %.4f", best_score)
 
-    return best_params, best_model, best_val_proba, results_df
+    return best_params, best_model, results_df
 
 def save_stage_results(results_df: pd.DataFrame, best_params: dict, output_dir: Path, stage: str, logger) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -324,6 +324,57 @@ def save_stage_results(results_df: pd.DataFrame, best_params: dict, output_dir: 
 
     logger.info(f"Saved stage 1 results to: {csv_path}")
     logger.info(f"Saved stage 1 best params to: {json_path}")
+
+def tuning_stage_2(model, X_val, y_val, config: dict, logger) -> tuple[dict, pd.DataFrame]:
+    tuning_cfg = config["tuning_stage_2"]
+    metric_name = tuning_cfg["metric"]
+    threshold_values = tuning_cfg["threshold_values"]
+
+    logger.info("Starting tuning stage 2")
+    logger.info(f"Stage 2 metric: {metric_name}")
+    logger.info(f"Stage 2 threshold values: {threshold_values}")
+
+    val_proba = model.predict_proba(X_val)[:, 1]
+    results = []
+    best_result = None
+    best_score = float("-inf")
+
+    for threshold in threshold_values:
+        logger.info("Evaluating threshold candidate: %.3f", threshold)
+        val_pred = apply_threshold(val_proba, threshold)
+
+        metrics = calculate_binary_metrics(y_true=y_val, y_pred=val_pred, y_proba=val_proba)
+        row = {
+            "decision_threshold": threshold,
+            **metrics,
+        }
+        results.append(row)
+
+        current_score = metrics[metric_name]
+
+        logger.info(f"Stage 2 result: threshold=%.3f, {metric_name}=%.4f, f1=%.4f, recall=%.4f, precision=%.4f",
+            threshold,
+            current_score,
+            metrics["f1"],
+            metrics["recall"],
+            metrics["precision"],
+        )
+
+        if current_score > best_score:
+            best_score = current_score
+            best_result = row
+
+    if best_result is None:
+        raise RuntimeError("Tuning stage 2 failed to produce a best threshold.")
+
+    results_df = pd.DataFrame(results).sort_values(
+        by=[metric_name, "f1", "roc_auc", "recall", "precision"],
+        ascending=False,
+    ).reset_index(drop=True)
+
+    logger.info(f"Stage 2 best result: {best_result}")
+
+    return best_result, results_df
 
 def main() -> None:
     config = load_config(CONFIG_PATH)
