@@ -309,6 +309,22 @@ def tuning_stage_1(X_train, y_train, X_val, y_val, config: dict, logger) -> tupl
 
     return best_params, best_model, best_val_proba, results_df
 
+def save_stage_results(results_df: pd.DataFrame, best_params: dict, output_dir: Path, stage: str, logger) -> None:
+    output_dir.mkdir(parents=True, exist_ok=True)
+    file_csv = "tuning_stage" + str(stage) + "_results.csv"
+    file_json = "tuning_stage" + str(stage) + "_params.json"
+
+    csv_path = output_dir / file_csv
+    json_path = output_dir / file_json
+
+    results_df.to_csv(csv_path, index=False)
+
+    with open(json_path, "w", encoding="utf-8") as f:
+        json.dump(best_params, f, indent=2, ensure_ascii=False)
+
+    logger.info(f"Saved stage 1 results to: {csv_path}")
+    logger.info(f"Saved stage 1 best params to: {json_path}")
+
 def main() -> None:
     config = load_config(CONFIG_PATH)
     logger = get_logger(config)
