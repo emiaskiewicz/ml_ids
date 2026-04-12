@@ -363,6 +363,76 @@ def tuning_stage_2(model, X_val, y_val, config: dict, logger) -> tuple[dict, pd.
 
     return best_result, results_df
 
+def plot_tuning_stage_1(results_df: pd.DataFrame, config: dict, logger) -> None:
+    metric_name = config["tuning_stage_1"]["metric"]
+    output_dir = BASE_DIR / config["output"]["output_dir"]
+    output_dir.mkdir(parents=True, exist_ok=True)
+    save_path = output_dir / "stage_1_metric_heatmap.jpg"
+
+    plot_df = results_df.copy()
+    plot_df["class_weight"] = plot_df["class_weight"].astype(str)
+
+    pivot_df = plot_df.pivot(index="class_weight", columns="C", values=metric_name)
+
+    fig, ax = plt.subplots(figsize=(7, 4.5))
+    im = ax.imshow(pivot_df.values, aspect="auto")
+
+    ax.set_xticks(range(len(pivot_df.columns)))
+    ax.set_xticklabels([str(col) for col in pivot_df.columns])
+    ax.set_yticks(range(len(pivot_df.index)))
+    ax.set_yticklabels(pivot_df.index)
+
+    ax.set_xlabel("C")
+    ax.set_ylabel("class_weight")
+    ax.set_title(f"Stage 1 - {metric_name.upper()} heatmap")
+
+    for i in range(pivot_df.shape[0]):
+        for j in range(pivot_df.shape[1]):
+            value = pivot_df.iloc[i, j]
+            ax.text(j, i, f"{value:.4f}", ha="center", va="center")
+
+    fig.colorbar(im, ax=ax, label=metric_name)
+    plt.tight_layout()
+    plt.savefig(save_path, dpi=300, bbox_inches="tight")
+    plt.close(fig)
+
+    logger.info(f"Saved stage 1 tuning plot to: {save_path}")
+
+def plot_tuning_stage_2(results_df: pd.DataFrame, config: dict, logger) -> None:
+    metric_name = config["tuning_stage_2"]["metric"]
+    output_dir = BASE_DIR / config["output"]["output_dir"]
+    output_dir.mkdir(parents=True, exist_ok=True)
+    save_path = output_dir / "stage_2_threshold_curves.jpg"
+
+    plot_df = results_df.sort_values("decision_threshold")
+
+    fig, ax = plt.subplots(figsize=(7, 4.5))
+    ax.plot(plot_df["decision_threshold"], plot_df["precision"], label="precision")
+    ax.plot(plot_df["decision_threshold"], plot_df["recall"], label="recall")
+    ax.plot(plot_df["decision_threshold"], plot_df["f1"], label="f1")
+
+    if metric_name not in {"precision", "recall", "f1"} and metric_name in plot_df.columns:
+        ax.plot(plot_df["decision_threshold"], plot_df[metric_name], label=metric_name)
+
+    best_idx = plot_df[metric_name].idxmax()
+    best_threshold = plot_df.loc[best_idx, "decision_threshold"]
+    best_score = plot_df.loc[best_idx, metric_name]
+
+    ax.axvline(best_threshold, linestyle="--", alpha=0.7)
+    ax.text(best_threshold, best_score, f" best={best_threshold:.2f}", va="bottom")
+
+    ax.set_xlabel("Decision threshold")
+    ax.set_ylabel("Score")
+    ax.set_title(f"Stage 2 - metrics vs threshold ({metric_name.upper()})")
+    ax.legend()
+    ax.grid(True, alpha=0.3)
+
+    plt.tight_layout()
+    plt.savefig(save_path, dpi=300, bbox_inches="tight")
+    plt.close(fig)
+
+    logger.info(f"Saved stage 2 tuning plot to: {save_path}")
+
 def main() -> None:
     config = load_config(CONFIG_PATH)
     logger = get_logger(config)
@@ -379,14 +449,14 @@ def main() -> None:
         logger.info("Tuning mode enabled")
 
         best_stage_1_params, best_stage_1_model, stage_1_results_df = tuning_stage_1(X_train, y_train, X_val, y_val, config, logger)
-
         save_stage_results(stage_1_results_df, best_stage_1_params, config["output"]["output_dir"], "1", logger)
-
+        plot_tuning_stage_1(stage_1_results_df, config, logger)
         best_threshold = config["model"].get("decision_threshold", 0.5)
 
         if stage_2_enabled:
             best_stage_2_params, stage_2_results_df = tuning_stage_2(best_stage_1_model, X_val, y_val, config,logger)
             save_stage_results(stage_2_results_df, best_stage_2_params, config["output"]["output_dir"], "2",logger)
+            plot_tuning_stage_2(stage_2_results_df, config, logger)
             best_threshold = best_stage_2_params["decision_threshold"]
 
         logger.info("Preparing final train+val dataset")
