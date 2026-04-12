@@ -10,6 +10,7 @@ from sklearn.metrics import (accuracy_score, precision_score, recall_score, f1_s
 import matplotlib.pyplot as plt
 import json
 import os
+import pandas as pd
 
 os.environ["LOKY_MAX_CPU_COUNT"] = "8"
 
@@ -221,6 +222,92 @@ def save_visualizations(metrics: dict, config: dict, logger: logging.Logger) -> 
 
 def save_model(config: dict, logger: logging.Logger) -> dict:
     pass
+
+def apply_threshold(y_proba: pd.Series | list[float], threshold: float) -> list[int]:
+    return [1 if prob >= threshold else 0 for prob in y_proba]
+
+def calculate_binary_metrics(y_true, y_pred,y_proba) -> dict[str, float]:
+    return {
+        "accuracy": accuracy_score(y_true, y_pred),
+        "precision": precision_score(y_true, y_pred, zero_division=0),
+        "recall": recall_score(y_true, y_pred, zero_division=0),
+        "f1": f1_score(y_true, y_pred, zero_division=0),
+        "roc_auc": roc_auc_score(y_true, y_proba),
+        "average_precision": average_precision_score(y_true, y_proba),
+    }
+
+def tuning_stage_1(X_train, y_train, X_val, y_val, config: dict, logger) -> tuple[dict, LogisticRegression, list[float], pd.DataFrame]:
+    tuning_cfg = config["tuning_stage_1"]
+    model_cfg = config["model"]
+
+    metric_name = tuning_cfg["metric"]
+    threshold = model_cfg.get("decision_threshold", 0.5)
+    c_values = tuning_cfg["C_values"]
+    class_weight_values = tuning_cfg["class_weight_values"]
+
+    results = []
+
+    best_score = float("-inf")
+    best_params = None
+    best_model = None
+    best_val_proba = None
+
+    logger.info("Starting tuning stage 1")
+    logger.info(f"Stage 1 search space: {len(c_values)} C values x {len(class_weight_values)} class_weight values")
+
+    for c_value in c_values:
+        for class_weight in class_weight_values:
+            logger.info(f"Training stage 1 candidate: C={c_value}, class_weight={class_weight}")
+
+            model = LogisticRegression(
+                max_iter=model_cfg["max_iter"],
+                solver=model_cfg["solver"],
+                random_state=config["experiment"]["random_state"],
+                C=c_value,
+                class_weight=class_weight,
+            )
+
+            model.fit(X_train, y_train)
+
+            val_proba = model.predict_proba(X_val)[:, 1]
+            val_pred = apply_threshold(val_proba, threshold)
+
+            metrics = calculate_binary_metrics(y_true=y_val,y_pred=val_pred,y_proba=val_proba,)
+
+            row = {
+                "C": c_value,
+                "class_weight": class_weight,
+                "decision_threshold": threshold,
+                **metrics,
+            }
+            results.append(row)
+
+            current_score = metrics[metric_name]
+
+            logger.info(f"Stage 1 result: C={c_value}, class_weight={class_weight}, {current_score}=%.4f, f1=%.4f, recall=%.4f, precision=%.4f",metrics["f1"],metrics["recall"],metrics["precision"])
+
+            if current_score > best_score:
+                best_score = current_score
+                best_params = {
+                    "C": c_value,
+                    "class_weight": class_weight,
+                    "decision_threshold": threshold,
+                }
+                best_model = model
+                best_val_proba = val_proba.tolist()
+
+    if best_params is None or best_model is None or best_val_proba is None:
+        raise RuntimeError("Tuning stage 1 failed to produce a best model.")
+
+    results_df = pd.DataFrame(results).sort_values(
+        by=[metric_name, "f1", "roc_auc", "recall", "precision"],
+        ascending=False,
+    ).reset_index(drop=True)
+
+    logger.info(f"Stage 1 best params: {best_params}")
+    logger.info(f"Stage 1 best {metric_name}: %.4f", best_score)
+
+    return best_params, best_model, best_val_proba, results_df
 
 def main() -> None:
     config = load_config(CONFIG_PATH)
