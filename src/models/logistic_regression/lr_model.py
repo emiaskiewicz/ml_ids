@@ -30,17 +30,21 @@ def log_config(config: dict, logger) -> None:
     )
     logger.info(f"Loaded configuration:\n{config_text}")
 
-def build_model(config: dict, logger) -> LogisticRegression:
-    model_cfg = config["model"]
+def build_model(config: dict, overrides: dict, logger) -> LogisticRegression:
+    model_cfg = config["model"].copy()
+    if overrides:
+        model_cfg.update(overrides)
+
     random_state = config["experiment"]["random_state"]
     logger.info("Building Logistic Regression model")
     logger.info(f"Model parameters: max_iter={model_cfg['max_iter']}, solver={model_cfg['solver']},"
-                f"class_weight={model_cfg['class_weight']}, random_state={random_state}")
+                f"class_weight={model_cfg['class_weight']}, C value={model_cfg['C']}, random_state={random_state}")
 
     model = LogisticRegression(
         max_iter=model_cfg["max_iter"],
         solver=model_cfg["solver"],
         class_weight=model_cfg["class_weight"],
+        C=model_cfg["C"],
         random_state=random_state
     )
 
@@ -52,51 +56,41 @@ def train_model(model: LogisticRegression, X_train, y_train, logger) -> Logistic
     logger.info("Model training completed")
     return model
 
-def evaluate_model(model, X, y, split_name: str, logger) -> dict:
+def evaluate_model(model, X, y, split_name: str, threshold: float, logger) -> dict:
     logger.info(f"Evaluating model on {split_name} set")
-
-    y_pred = model.predict(X)
-
     if hasattr(model, "predict_proba"):
         y_proba = model.predict_proba(X)[:, 1]
+        y_pred = apply_threshold(y_proba, threshold)
+        threshold_used = threshold
     else:
         y_proba = None
+        y_pred = model.predict(X)
+        threshold_used = None
+        logger.warning("Model does not support predict_proba. Falling back to model.predict(); threshold is ignored.")
 
-    accuracy = accuracy_score(y, y_pred)
-    precision = precision_score(y, y_pred, zero_division=0)
-    recall = recall_score(y, y_pred, zero_division=0)
-    f1 = f1_score(y, y_pred, zero_division=0)
-    roc_auc = roc_auc_score(y, y_proba) if y_proba is not None else None
-    avg_precision = average_precision_score(y, y_proba) if y_proba is not None else None
+    metrics = calculate_binary_metrics(y, y_pred, y_proba)
     cm = confusion_matrix(y, y_pred)
     report = classification_report(y, y_pred, zero_division=0)
 
-    logger.info(f"{split_name} Accuracy: {accuracy:.4f}")
-    logger.info(f"{split_name} Precision: {precision:.4f}")
-    logger.info(f"{split_name} Recall: {recall:.4f}")
-    logger.info(f"{split_name} F1-score: {f1:.4f}")
-
-    if roc_auc is not None:
-        logger.info(f"{split_name} ROC-AUC: {roc_auc:.4f}")
-    if avg_precision is not None:
-        logger.info(f"{split_name} Average Precision: {avg_precision:.4f}")
-
+    logger.info(f"{split_name} Threshold used: {threshold_used}")
+    logger.info(f"{split_name} Accuracy: {metrics['accuracy']:.4f}")
+    logger.info(f"{split_name} Precision: {metrics['precision']:.4f}")
+    logger.info(f"{split_name} Recall: {metrics['recall']:.4f}")
+    logger.info(f"{split_name} F1-score: {metrics['f1']:.4f}")
+    logger.info(f"{split_name} ROC-AUC: {metrics['roc_auc']:.4f}")
+    logger.info(f"{split_name} Average Precision: {metrics['average_precision']:.4f}")
     logger.info(f"{split_name} Confusion Matrix:\n{cm}")
     logger.info(f"{split_name} Classification Report:\n{report}")
 
     return {
         "split_name": split_name,
-        "accuracy": accuracy,
-        "precision": precision,
-        "recall": recall,
-        "f1": f1,
-        "roc_auc": roc_auc,
-        "average_precision": avg_precision,
+        "threshold_used": threshold_used,
+        **metrics,
         "confusion_matrix": cm,
         "classification_report": report,
         "y_true": y.tolist() if hasattr(y, "tolist") else list(y),
-        "y_pred": y_pred.tolist(),
-        "y_proba": y_proba.tolist() if y_proba is not None else None,
+        "y_pred": y_pred.tolist() if hasattr(y_pred, "tolist") else list(y_pred),
+        "y_proba": y_proba.tolist()
     }
 
 def save_to_txt(metrics: dict, exp_name: str, path: Path):
@@ -246,11 +240,9 @@ def tuning_stage_1(X_train, y_train, X_val, y_val, config: dict, logger) -> tupl
     class_weight_values = tuning_cfg["class_weight_values"]
 
     results = []
-
     best_score = float("-inf")
     best_params = None
     best_model = None
-    best_val_proba = None
 
     logger.info("Starting tuning stage 1")
     logger.info(f"Stage 1 search space: {len(c_values)} C values x {len(class_weight_values)} class_weight values")
@@ -284,7 +276,8 @@ def tuning_stage_1(X_train, y_train, X_val, y_val, config: dict, logger) -> tupl
 
             current_score = metrics[metric_name]
 
-            logger.info(f"Stage 1 result: C={c_value}, class_weight={class_weight}, {current_score}=%.4f, f1=%.4f, recall=%.4f, precision=%.4f",metrics["f1"],metrics["recall"],metrics["precision"])
+            logger.info(f"Stage 1 result: C={c_value}, class_weight={class_weight}, {metric_name}={current_score:.4f},"
+                        f" f1={metrics['f1']:.4f}, recall={metrics['recall']:.4f}, precision={metrics['precision']:.4f}")
 
             if current_score > best_score:
                 best_score = current_score
@@ -294,9 +287,8 @@ def tuning_stage_1(X_train, y_train, X_val, y_val, config: dict, logger) -> tupl
                     "decision_threshold": threshold,
                 }
                 best_model = model
-                best_val_proba = val_proba.tolist()
 
-    if best_params is None or best_model is None or best_val_proba is None:
+    if best_params is None or best_model is None:
         raise RuntimeError("Tuning stage 1 failed to produce a best model.")
 
     results_df = pd.DataFrame(results).sort_values(
@@ -305,17 +297,18 @@ def tuning_stage_1(X_train, y_train, X_val, y_val, config: dict, logger) -> tupl
     ).reset_index(drop=True)
 
     logger.info(f"Stage 1 best params: {best_params}")
-    logger.info(f"Stage 1 best {metric_name}: %.4f", best_score)
+    logger.info(f"Stage 1 best {metric_name}: {best_score:.4f}")
 
     return best_params, best_model, results_df
 
 def save_stage_results(results_df: pd.DataFrame, best_params: dict, output_dir: Path, stage: str, logger) -> None:
-    output_dir.mkdir(parents=True, exist_ok=True)
+    path = BASE_DIR / output_dir
+    path.mkdir(parents=True, exist_ok=True)
     file_csv = "tuning_stage" + str(stage) + "_results.csv"
     file_json = "tuning_stage" + str(stage) + "_params.json"
 
-    csv_path = output_dir / file_csv
-    json_path = output_dir / file_json
+    csv_path = path / file_csv
+    json_path = path / file_json
 
     results_df.to_csv(csv_path, index=False)
 
@@ -331,8 +324,7 @@ def tuning_stage_2(model, X_val, y_val, config: dict, logger) -> tuple[dict, pd.
     threshold_values = tuning_cfg["threshold_values"]
 
     logger.info("Starting tuning stage 2")
-    logger.info(f"Stage 2 metric: {metric_name}")
-    logger.info(f"Stage 2 threshold values: {threshold_values}")
+    logger.info(f"Stage 2 metric: {metric_name}, threshold values: {threshold_values}")
 
     val_proba = model.predict_proba(X_val)[:, 1]
     results = []
@@ -340,7 +332,7 @@ def tuning_stage_2(model, X_val, y_val, config: dict, logger) -> tuple[dict, pd.
     best_score = float("-inf")
 
     for threshold in threshold_values:
-        logger.info("Evaluating threshold candidate: %.3f", threshold)
+        logger.info(f"Evaluating threshold candidate: {threshold:.3f}")
         val_pred = apply_threshold(val_proba, threshold)
 
         metrics = calculate_binary_metrics(y_true=y_val, y_pred=val_pred, y_proba=val_proba)
@@ -352,13 +344,8 @@ def tuning_stage_2(model, X_val, y_val, config: dict, logger) -> tuple[dict, pd.
 
         current_score = metrics[metric_name]
 
-        logger.info(f"Stage 2 result: threshold=%.3f, {metric_name}=%.4f, f1=%.4f, recall=%.4f, precision=%.4f",
-            threshold,
-            current_score,
-            metrics["f1"],
-            metrics["recall"],
-            metrics["precision"],
-        )
+        logger.info(f"Stage 2 result: threshold={threshold:.3f}, {metric_name}={current_score:.4f},"
+                    f" f1={metrics['f1']:.4f}, recall={metrics['recall']:.4f}, precision={metrics['precision']:.4f}")
 
         if current_score > best_score:
             best_score = current_score
@@ -385,17 +372,58 @@ def main() -> None:
     X_train, X_val, X_test, y_train, y_val, y_test = prepare_lr_data(config)
     logger.info("Data prepared successfully")
 
-    model = build_model(config, logger)
+    stage_1_enabled = config.get("tuning_stage_1", {}).get("enabled", False)
+    stage_2_enabled = config.get("tuning_stage_2", {}).get("enabled", False)
 
-    model = train_model(model, X_train, y_train, logger)
+    if stage_1_enabled:
+        logger.info("Tuning mode enabled")
 
-    val_metrics = evaluate_model(model, X_val, y_val, "Validation", logger)
+        best_stage_1_params, best_stage_1_model, stage_1_results_df = tuning_stage_1(X_train, y_train, X_val, y_val, config, logger)
 
-    if config["output"]["save_metrics"]:
-        save_metrics(val_metrics, config, logger)
+        save_stage_results(stage_1_results_df, best_stage_1_params, config["output"]["output_dir"], "1", logger)
 
-    if config["output"]["save_plots"]:
-        save_visualizations(val_metrics, config, logger)
+        best_threshold = config["model"].get("decision_threshold", 0.5)
+
+        if stage_2_enabled:
+            best_stage_2_params, stage_2_results_df = tuning_stage_2(best_stage_1_model, X_val, y_val, config,logger)
+            save_stage_results(stage_2_results_df, best_stage_2_params, config["output"]["output_dir"], "2",logger)
+            best_threshold = best_stage_2_params["decision_threshold"]
+
+        logger.info("Preparing final train+val dataset")
+        X_train_final = pd.concat([X_train, X_val], axis=0)
+        y_train_final = pd.concat([y_train, y_val], axis=0)
+
+        logger.info(f"Final train+val shapes: X={X_train_final.shape}, y={y_train_final.shape}")
+
+        final_model = build_model(config,{
+                "C": best_stage_1_params["C"],
+                "class_weight": best_stage_1_params["class_weight"],
+            }, logger
+        )
+
+        final_model = train_model(final_model, X_train_final, y_train_final, logger)
+
+        test_metrics = evaluate_model(final_model,X_test,y_test,"Test", best_threshold, logger)
+
+        if config["output"]["save_metrics"]:
+            save_metrics(test_metrics, config, logger)
+
+        if config["output"]["save_plots"]:
+            save_visualizations(test_metrics, config, logger)
+
+    else:
+        logger.info("Standard run mode")
+        model = build_model(config, {}, logger)
+
+        model = train_model(model, X_train, y_train, logger)
+
+        val_metrics = evaluate_model(model, X_val, y_val, "Validation", 0.5, logger)
+
+        if config["output"]["save_metrics"]:
+            save_metrics(val_metrics, config, logger)
+
+        if config["output"]["save_plots"]:
+            save_visualizations(val_metrics, config, logger)
 
     winsound.Beep(2500,1000)
 
