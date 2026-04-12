@@ -34,6 +34,8 @@ model:
   max_iter: 1000
   solver: "lbfgs"
   class_weight: null
+  C: 1.0
+  decision_threshold: 0.5
 
 tuning_stage_1:
   enabled: true
