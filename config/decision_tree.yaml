@@ -1,0 +1,49 @@
+experiment:
+  name: "DT"
+  random_state: 23
+
+data:
+  input_dir: "data/cleaned"
+  dataset_variant: "easy"
+  target_column: "Target"
+  label_column: "Label"
+
+split:
+  test_size: 0.2
+  val_size: 0.1
+  stratify: true
+  load_existing_split: false
+  save_split: true
+  split_dir: "data/split/easy/"
+
+features:
+  drop_columns:
+    - "Label"
+  remove_correlated_features: false
+  correlation_threshold: 0.95
+  use_feature_selection: false
+  feature_selection_method: null
+  selected_k_features: 40
+  smote: false
+
+model:
+  key: val
+
+tuning_stage_1:
+  enabled: false
+
+tuning_stage_2:
+  enabled: false
+
+output:
+  output_dir: "outputs/decision_tree/easy/DT"
+  save_metrics: true
+  save_plots: true
+  save_predictions: false
+  save_model: false
+  save_tuning_results: true
+  save_best_config: true
+
+logging:
+  log_path: "logs/decision_tree/easy/DT.log"
+  log_level: "INFO"
