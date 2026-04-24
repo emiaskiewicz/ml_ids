@@ -10,33 +10,9 @@ from imblearn.over_sampling import SMOTE
 
 BASE_DIR = Path(__file__).resolve().parents[3]
 
-DATASET_FILE_MAP = {
-    "easy": "cicids2017_easy.csv",
-    "medium": "cicids2017_medium.csv",
-    "hard": "cicids2017_hard.csv",
-}
-
 def get_logger(config: dict):
     log_path = BASE_DIR / config["logging"]["log_path"]
     return setup_logger(log_path)
-
-def get_dataset_path(config: dict, logger) -> Path:
-    input_dir = BASE_DIR / config["data"]["input_dir"]
-    dataset_variant = config["data"]["dataset_variant"]
-
-    if dataset_variant not in DATASET_FILE_MAP:
-        #todo: dodac try/except w dt_model.py
-        #raise ValueError(f"Invalid dataset variant: {dataset_variant}. Expected one of {list(DATASET_FILE_MAP.keys())}")
-        logger.critical(f"Invalid dataset variant: {dataset_variant}. Expected one of {list(DATASET_FILE_MAP.keys())}. Exiting")
-        exit(1)
-
-    return input_dir / DATASET_FILE_MAP[dataset_variant]
-
-def load_dataset(dataset_path: Path, logger) -> pd.DataFrame:
-    logger.info(f"Loading dataset from: {dataset_path}")
-    df = pd.read_csv(dataset_path, memory_map=True, low_memory=False)
-    logger.info(f"Loaded dataset with shape: {df.shape}")
-    return df
 
 def get_split_paths(config: dict) -> tuple[Path, Path, Path]:
     split_dir = BASE_DIR / config["split"]["split_dir"]
