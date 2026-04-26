@@ -36,9 +36,19 @@ model:
 
 tuning_stage_1:
   enabled: false
+  metric: f1
+  criterion_values: ["gini", "entropy"]
+  max_depth_values: [5, 10, 15, null]
+  min_samples_split_values: [2, 10, 20]
+  min_samples_leaf_values: [1, 5, 10]
+  max_features_values: [null]
+  class_weight_values: [null, "balanced"]
+  ccp_alpha_values: [0.0, 0.001]
 
 tuning_stage_2:
   enabled: false
+  metric: f1
+  threshold_values: [0.3, 0.4, 0.5, 0.6, 0.7]
 
 output:
   output_dir: "outputs/decision_tree/easy/DT"
