@@ -12,8 +12,7 @@ split:
   test_size: 0.2
   val_size: 0.1
   stratify: true
-  load_existing_split: false
-  save_split: true
+  load_existing_split: true
   split_dir: "data/split/easy/"
 
 features:
@@ -27,7 +26,13 @@ features:
   smote: false
 
 model:
-  key: val
+  criterion: gini
+  max_depth: 10
+  min_samples_split: 20
+  min_samples_leaf: 10
+  max_features: null
+  class_weight: null
+  ccp_alpha: 0.0
 
 tuning_stage_1:
   enabled: false
