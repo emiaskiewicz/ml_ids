@@ -1,4 +1,6 @@
 import logging
+import subprocess
+import csv
 import winsound
 from pathlib import Path
 import yaml
@@ -17,6 +19,10 @@ os.environ["LOKY_MAX_CPU_COUNT"] = "8"
 
 BASE_DIR = Path(__file__).resolve().parents[3]
 CONFIG_PATH = BASE_DIR / "config" / "decision_tree.yaml"
+RESULTS_COLUMNS = ["experiment", "dataset_variant", "split", "accuracy", "precision", "recall", "f1",
+                   "roc_auc", "average_precision", "threshold", "feature_selection", "selected_k_features",
+                   "smote", "criterion", "max_depth", "min_samples_split", "min_samples_leaf", "max_features",
+                   "class_weight", "ccp_alpha", "tuning_stage_1", "tuning_stage_2"]
 
 def load_config(config_path: Path) -> dict:
     with config_path.open("r", encoding="utf-8") as file:
@@ -112,7 +118,7 @@ def save_to_txt(metrics: dict, exp_name: str, path: Path):
         "",
         "Confusion Matrix:", str(metrics["confusion_matrix"]),
         "",
-        "Classification Report:",metrics["classification_report"],
+        "Classification Report:",metrics["classification_report"]
     ]
 
     with path.open("w", encoding="utf-8") as file:
@@ -129,7 +135,7 @@ def save_to_json(metrics: dict, exp_name: str, path: Path):
         "roc_auc": metrics["roc_auc"],
         "average_precision": metrics["average_precision"],
         "confusion_matrix": metrics["confusion_matrix"].tolist(),
-        "classification_report": metrics["classification_report"],
+        "classification_report": metrics["classification_report"]
     }
 
     with path.open("w", encoding="utf-8") as file:
@@ -148,6 +154,57 @@ def save_metrics(metrics: dict, config: dict, logger: logging.Logger) -> None:
 
     save_to_json(metrics, config["experiment"]["name"], json_path)
     logger.info(f"Saved metrics JSON to: {json_path}")
+
+def append_results_to_csv(results: dict, csv_path: Path) -> None:
+    csv_path.parent.mkdir(parents=True, exist_ok=True)
+
+    file_exists = csv_path.exists()
+    file_is_empty = file_exists and csv_path.stat().st_size == 0
+
+    row = {column: results.get(column, None) for column in RESULTS_COLUMNS}
+
+    with csv_path.open("a", newline="", encoding="utf-8") as file:
+        writer = csv.DictWriter(file, fieldnames=RESULTS_COLUMNS)
+
+        if not file_exists or file_is_empty:
+            writer.writeheader()
+
+        writer.writerow(row)
+
+def build_results_summary_row(metrics: dict, config: dict, model_params: dict | None) -> dict:
+    if model_params is None:
+        model_params = config["model"]
+
+    features_cfg = config["features"]
+    model_cfg = config["model"]
+
+    return {
+        "experiment": config["experiment"]["name"],
+        "dataset_variant": config["data"]["dataset_variant"],
+        "split": metrics["split_name"],
+        "accuracy": metrics["accuracy"],
+        "precision": metrics["precision"],
+        "recall": metrics["recall"],
+        "f1": metrics["f1"],
+        "roc_auc": metrics["roc_auc"],
+        "average_precision": metrics["average_precision"],
+        "threshold": metrics["threshold_used"],
+
+        "feature_selection": features_cfg.get("use_feature_selection", False),
+        "selected_k_features": features_cfg.get("selected_k_features", None),
+        "smote": features_cfg.get("smote", False),
+
+        "criterion": model_params.get("criterion", model_cfg.get("criterion")),
+        "max_depth": model_params.get("max_depth", model_cfg.get("max_depth")),
+        "min_samples_split": model_params.get("min_samples_split", model_cfg.get("min_samples_split")),
+        "min_samples_leaf": model_params.get("min_samples_leaf", model_cfg.get("min_samples_leaf")),
+        "max_features": model_params.get("max_features", model_cfg.get("max_features")),
+        "class_weight": model_params.get("class_weight", model_cfg.get("class_weight")),
+        "ccp_alpha": model_params.get("ccp_alpha", model_cfg.get("ccp_alpha")),
+
+        "tuning_stage_1": config.get("tuning_stage_1", {}).get("enabled", False),
+        "tuning_stage_2": config.get("tuning_stage_2", {}).get("enabled", False),
+    }
 
 def plot_confusion_matrix(metrics: dict, config: dict, logger: logging.Logger) -> None:
     split_name = metrics["split_name"].lower()
@@ -478,6 +535,11 @@ def main() -> None:
 
         test_metrics = evaluate_model(final_model,X_test,y_test,"Test", best_threshold, logger)
 
+        summary_row = build_results_summary_row(metrics=test_metrics, config=config, model_params=best_stage_1_params)
+        summary_csv_path = BASE_DIR / config["output"]["summary_path"]
+        append_results_to_csv(summary_row, summary_csv_path)
+        logger.info(f"Added experiment results to summary CSV: {summary_csv_path}")
+
         if config["output"]["save_metrics"]:
             save_metrics(test_metrics, config, logger)
 
@@ -493,6 +555,11 @@ def main() -> None:
         threshold = config["model"].get("decision_threshold", 0.5)
         val_metrics = evaluate_model(model, X_val, y_val, "Validation", threshold, logger)
 
+        summary_row = build_results_summary_row(metrics=val_metrics, config=config, model_params=config["model"])
+        summary_csv_path = BASE_DIR / config["output"]["summary_path"]
+        append_results_to_csv(summary_row, summary_csv_path)
+        logger.info(f"Added experiment results to summary CSV: {summary_csv_path}")
+
         if config["output"]["save_metrics"]:
             save_metrics(val_metrics, config, logger)
 
@@ -500,6 +567,7 @@ def main() -> None:
             save_visualizations(val_metrics, config, logger)
 
     winsound.Beep(2500,1000)
+    #subprocess.run(["paplay", "/usr/share/sounds/freedesktop/stereo/complete.oga"], check=False)
 
 if __name__ == "__main__":
     main()
