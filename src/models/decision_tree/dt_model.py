@@ -217,6 +217,7 @@ def plot_confusion_matrix(metrics: dict, config: dict, logger: logging.Logger) -
         y_pred=metrics["y_pred"],
         display_labels=["BENIGN", "ATTACK"],
         cmap="Blues",
+        values_format="d",
         ax=ax
     )
     ax.set_title(f"{metrics['split_name']} - Confusion Matrix")
@@ -243,6 +244,9 @@ def plot_roc_curve(metrics: dict, config: dict, logger: logging.Logger) -> None:
         name=f"{config['experiment']['name']} ({metrics['split_name']})"
     )
     ax.set_title(f"{metrics['split_name']} - ROC Curve")
+    ax.set_xlim(0.0, 0.02)
+    ax.set_ylim(0.98, 1.0)
+    ax.grid(True, alpha=0.3)
     plt.tight_layout()
     plt.savefig(save_path, dpi=300, bbox_inches="tight")
     plt.close(fig)
@@ -266,6 +270,9 @@ def plot_precision_recall_curve(metrics: dict, config: dict, logger: logging.Log
         name=f"{config['experiment']['name']} ({metrics['split_name']})"
     )
     ax.set_title(f"{metrics['split_name']} - Precision-Recall Curve")
+    ax.set_xlim(0.98, 1.0)
+    ax.set_ylim(0.98, 1.0)
+    ax.grid(True, alpha=0.3)
     plt.tight_layout()
     plt.savefig(save_path, dpi=300, bbox_inches="tight")
     plt.close(fig)
@@ -456,6 +463,8 @@ def plot_tuning_stage_1(results_df: pd.DataFrame, config: dict, logger) -> None:
     ax.barh(plot_df["label"], plot_df[metric_name])
     ax.invert_yaxis()
     ax.set_xlabel(metric_name)
+    ax.set_xlim(0.992, 1.0)
+    ax.grid(True, axis="x", alpha=0.3)
     ax.set_title(f"Stage 1 - top configurations by {metric_name.upper()}")
     plt.tight_layout()
     plt.savefig(save_path, dpi=300, bbox_inches="tight")
@@ -488,6 +497,7 @@ def plot_tuning_stage_2(results_df: pd.DataFrame, config: dict, logger) -> None:
 
     ax.set_xlabel("Decision threshold")
     ax.set_ylabel("Score")
+    ax.set_ylim(0.98, 1.0)
     ax.set_title(f"Stage 2 - metrics vs threshold ({metric_name.upper()})")
     ax.legend()
     ax.grid(True, alpha=0.3)
