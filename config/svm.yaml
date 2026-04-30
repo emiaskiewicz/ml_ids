@@ -23,7 +23,11 @@ features:
   use_feature_selection: false
   feature_selection_method: "select_k_best" #"rfe"
   selected_k_features: 40
+
+preprocessing:
   smote: false
+  scaling: false
+  scaler: "standard"
 
 model:
   key: val
