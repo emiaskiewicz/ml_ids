@@ -26,11 +26,18 @@ features:
 
 preprocessing:
   smote: false
-  scaling: false
+  scaling: true
   scaler: "standard"
 
 model:
-  key: val
+  C: 1.0
+  loss: "squared_hinge"
+  penalty: "l2"
+  dual: false
+  tol: 0.0001
+  max_iter: 5000
+  class_weight: null
+  decision_threshold: 0.0
 
 tuning_stage_1:
   enabled: false
