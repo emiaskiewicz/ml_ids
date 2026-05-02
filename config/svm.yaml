@@ -1,10 +1,10 @@
 experiment:
-  name: "SVM-01e"
+  name: "SVM-01m"
   random_state: 23
 
 data:
   input_dir: "data/cleaned"
-  dataset_variant: "easy"
+  dataset_variant: "medium"
   target_column: "Target"
   label_column: "Label"
 
@@ -13,7 +13,7 @@ split:
   val_size: 0.1
   stratify: true
   load_existing_split: true
-  split_dir: "data/split/easy/"
+  split_dir: "data/split/medium/"
 
 features:
   drop_columns:
@@ -41,14 +41,21 @@ model:
 
 tuning_stage_1:
   enabled: false
+  C_values: [0.01, 0.1, 1.0, 10.0, 100.0]
+  loss_values: ["squared_hinge"]
+  penalty_values: ["l2"]
+  dual_values: [false]
+  tol_values: [0.001, 0.0001]
+  class_weight_values: [null, "balanced"]
 
 tuning_stage_2:
   enabled: false
   metric: f1
+  threshold_values: [-3.0, -2.5, -2.0, -1.5, -1.0, -0.5, 0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0]
 
 output:
-  output_dir: "outputs/svm/easy/SVM-01e"
-  summary_path: "outputs/svm/easy/svm_e_results_sum.csv"
+  output_dir: "outputs/svm/medium/SVM-01m"
+  summary_path: "outputs/svm/medium/svm_m_results_sum.csv"
   save_metrics: true
   save_plots: true
   save_predictions: false
@@ -57,5 +64,5 @@ output:
   save_best_config: true
 
 logging:
-  log_path: "logs/svm/easy/SVM-01e.log"
+  log_path: "logs/svm/medium/SVM-01m.log"
   log_level: "INFO"
