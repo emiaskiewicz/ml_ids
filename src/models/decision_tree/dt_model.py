@@ -305,7 +305,7 @@ def tuning_stage_1(X_train, y_train, X_val, y_val, config: dict, logger) -> tupl
     model_cfg = config["model"]
 
     metric_name = tuning_cfg["metric"]
-    threshold = model_cfg.get("decision_threshold", 0.5)
+    threshold = model_cfg.get("decision_threshold", 0.0)
     criterion_values = tuning_cfg.get("criterion_values", [model_cfg["criterion"]])
     max_depth_values = tuning_cfg.get("max_depth_values", [model_cfg["max_depth"]])
     min_samples_split_values = tuning_cfg.get("min_samples_split_values", [model_cfg["min_samples_split"]])
@@ -526,7 +526,7 @@ def main() -> None:
         best_stage_1_params, best_stage_1_model, stage_1_results_df = tuning_stage_1(X_train, y_train, X_val, y_val, config, logger)
         save_stage_results(stage_1_results_df, best_stage_1_params, config["output"]["output_dir"], "1", logger)
         plot_tuning_stage_1(stage_1_results_df, config, logger)
-        best_threshold = config["model"].get("decision_threshold", 0.5)
+        best_threshold = config["model"].get("decision_threshold", 0.0)
 
         if stage_2_enabled:
             best_stage_2_params, stage_2_results_df = tuning_stage_2(best_stage_1_model, X_val, y_val, config,logger)
