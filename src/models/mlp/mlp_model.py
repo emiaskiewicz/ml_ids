@@ -20,7 +20,7 @@ CONFIG_PATH = BASE_DIR / "config" / "mlp.yaml"
 
 RESULTS_COLUMNS = ["experiment", "dataset_variant", "split", "accuracy", "precision", "recall", "f1", "roc_auc",
                    "average_precision", "threshold", "scaling", "scaler", "feature_selection", "feature_selection_method",
-                   "selected_k_features", "smote", "hidden_layers", "dropout", "learning_rate", "batch_size", "epochs",
+                   "selected_k_features", "smote", "hidden_layers", "activation", "dropout", "learning_rate", "batch_size", "epochs",
                    "weight_decay", "device", "early_stopping", "patience", "min_delta", "actual_epochs", "best_epoch",
                    "best_val_loss", "tuning_stage_1", "tuning_stage_2"]
 
@@ -37,8 +37,22 @@ def log_config(config: dict, logger) -> None:
     )
     logger.info(f"Loaded configuration:\n{config_text}")
 
+def get_activation_layer(activation_name: str) -> nn.Module:
+    activation_name = activation_name.lower()
+
+    if activation_name == "relu":
+        return nn.ReLU()
+    elif activation_name == "leaky_relu":
+        return nn.LeakyReLU()
+    elif activation_name == "tanh":
+        return nn.Tanh()
+    elif activation_name == "sigmoid":
+        return nn.Sigmoid()
+    else:
+        raise ValueError(f"Unsupported activation function: {activation_name}")
+
 class MLPNetwork(nn.Module):
-    def __init__(self, input_dim: int, hidden_layers: list[int], dropout: float):
+    def __init__(self, input_dim: int, hidden_layers: list[int], dropout: float, activation: str):
         super().__init__()
 
         layers = []
@@ -46,7 +60,7 @@ class MLPNetwork(nn.Module):
 
         for hidden_dim in hidden_layers:
             layers.append(nn.Linear(previous_dim, hidden_dim))
-            layers.append(nn.ReLU())
+            layers.append(get_activation_layer(activation))
 
             if dropout > 0:
                 layers.append(nn.Dropout(dropout))
@@ -108,12 +122,14 @@ def build_model(input_dim: int, config: dict, overrides: dict, logger) -> MLPNet
         model_cfg.update(overrides)
 
     logger.info("Building MLP model")
-    logger.info(f"Model parameters: input_dim={input_dim}, hidden_layers={model_cfg['hidden_layers']}, dropout={model_cfg['dropout']}")
+    logger.info(f"Model parameters: input_dim={input_dim}, hidden_layers={model_cfg['hidden_layers']}, "
+                f"dropout={model_cfg['dropout']}, activation={model_cfg['activation']}")
 
     model = MLPNetwork(
         input_dim=input_dim,
         hidden_layers=model_cfg["hidden_layers"],
-        dropout=model_cfg["dropout"]
+        dropout=model_cfg["dropout"],
+        activation=model_cfg.get("activation", "relu")
     )
 
     return model
@@ -403,6 +419,7 @@ def build_results_summary_row(metrics: dict, config: dict, model_params: dict | 
         "smote": prep_cfg.get("smote", False),
 
         "hidden_layers": model_params.get("hidden_layers", model_cfg.get("hidden_layers")),
+        "activation": model_params.get("activation", model_cfg.get("activation")),
         "dropout": model_params.get("dropout", model_cfg.get("dropout")),
         "learning_rate": model_params.get("learning_rate", model_cfg.get("learning_rate")),
         "batch_size": model_params.get("batch_size", model_cfg.get("batch_size")),
