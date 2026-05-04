@@ -1,0 +1,62 @@
+experiment:
+  name: "MLP-01e"
+  random_state: 23
+
+data:
+  input_dir: "data/cleaned"
+  dataset_variant: "easy"
+  target_column: "Target"
+  label_column: "Label"
+
+split:
+  test_size: 0.2
+  val_size: 0.1
+  stratify: true
+  load_existing_split: true
+  split_dir: "data/split/easy/"
+
+features:
+  remove_correlated_features: false
+  correlation_threshold: 0.95
+  use_feature_selection: false
+  feature_selection_method: "select_k_best" #"rfe"
+  selected_k_features: 40
+
+preprocessing:
+  smote: false
+  scaling: true
+  scaler: "standard"
+
+model:
+  hidden_layers: [64, 32]
+  activation: "relu"
+  dropout: 0.2
+  learning_rate: 0.001
+  batch_size: 4096
+  epochs: 30
+  weight_decay: 0.0001
+  decision_threshold: 0.5
+  device: "auto"
+  early_stopping: true
+  patience: 5
+  min_delta: 0.0001
+
+tuning_stage_1:
+  enabled: false
+  metric: f1
+
+tuning_stage_2:
+  enabled: false
+  metric: f1
+
+output:
+  output_dir: "outputs/mlp/easy/MLP-01e"
+  summary_path: "outputs/mlp/easy/mlp_e_results_sum.csv"
+  save_metrics: true
+  save_plots: true
+  save_tuning_results: true
+  save_best_config: true
+
+logging:
+  log_path: "logs/mlp/easy/MLP-01e.log"
+  log_level: "INFO"
