@@ -21,7 +21,8 @@ CONFIG_PATH = BASE_DIR / "config" / "mlp.yaml"
 RESULTS_COLUMNS = ["experiment", "dataset_variant", "split", "accuracy", "precision", "recall", "f1", "roc_auc",
                    "average_precision", "threshold", "scaling", "scaler", "feature_selection", "feature_selection_method",
                    "selected_k_features", "smote", "hidden_layers", "dropout", "learning_rate", "batch_size", "epochs",
-                   "weight_decay", "device", "tuning_stage_1", "tuning_stage_2"]
+                   "weight_decay", "device", "early_stopping", "patience", "min_delta", "actual_epochs", "best_epoch",
+                   "best_val_loss", "tuning_stage_1", "tuning_stage_2"]
 
 def load_config(config_path: Path) -> dict:
     with config_path.open("r", encoding="utf-8") as file:
@@ -58,6 +59,47 @@ class MLPNetwork(nn.Module):
 
     def forward(self, x):
         return self.network(x).squeeze(1)
+
+class EarlyStopping:
+    def __init__(self, patience: int, min_delta: float):
+        self.patience = patience
+        self.min_delta = min_delta
+        self.best_loss = float("inf")
+        self.best_epoch = 0
+        self.best_state_dict = None
+        self.epochs_without_improvement = 0
+        self.should_stop = False
+
+    def update(self, val_loss: float, model: nn.Module, epoch: int) -> bool:
+        improved = val_loss < self.best_loss - self.min_delta
+
+        if improved:
+            self.best_loss = val_loss
+            self.best_epoch = epoch
+            self.best_state_dict = {
+                key: value.detach().cpu().clone()
+                for key, value in model.state_dict().items()
+            }
+            self.epochs_without_improvement = 0
+        else:
+            self.epochs_without_improvement += 1
+
+        if self.enabled and self.epochs_without_improvement >= self.patience:
+            self.should_stop = True
+
+        return improved
+
+    def restore_best_weights(self, model: nn.Module, device, logger) -> None:
+        if self.best_state_dict is None:
+            logger.warning("EarlyStopping has no best state to restore")
+            return
+
+        model.load_state_dict({
+            key: value.to(device)
+            for key, value in self.best_state_dict.items()
+        })
+
+        logger.info(f"Restored best model weights from epoch {self.best_epoch} with val_loss={self.best_loss:.6f}")
 
 def build_model(input_dim: int, config: dict, overrides: dict, logger) -> MLPNetwork:
     model_cfg = config["model"].copy()
@@ -110,8 +152,21 @@ def train_model(model, train_loader, val_loader, config: dict, device, logger):
 
     epochs = model_cfg["epochs"]
     history = []
+    early_stopping_enabled = model_cfg.get("early_stopping", False)
+    early_stopping = None
+
+    if early_stopping_enabled:
+        early_stopping = EarlyStopping(
+            patience=model_cfg.get("patience", 5),
+            min_delta=model_cfg.get("min_delta", 0.0)
+        )
+        logger.info(f"Early stopping enabled: patience={early_stopping.patience}, min_delta={early_stopping.min_delta}")
+    else:
+        logger.info("Early stopping disabled")
 
     model.to(device)
+    best_val_loss = float("inf")
+    best_epoch = 0
 
     for epoch in range(1, epochs + 1):
         model.train()
@@ -132,13 +187,37 @@ def train_model(model, train_loader, val_loader, config: dict, device, logger):
         train_loss = train_loss / len(train_loader.dataset)
         val_loss = calculate_loss(model, val_loader, criterion, device)
 
+        if early_stopping_enabled:
+            improved = early_stopping.update(val_loss, model, epoch)
+            best_val_loss = early_stopping.best_loss
+            best_epoch = early_stopping.best_epoch
+            epochs_without_improvement = early_stopping.epochs_without_improvement
+        else:
+            improved = val_loss < best_val_loss
+            if improved:
+                best_val_loss = val_loss
+                best_epoch = epoch
+            epochs_without_improvement = None
+
         history.append({
             "epoch": epoch,
             "train_loss": train_loss,
-            "val_loss": val_loss
+            "val_loss": val_loss,
+            "best_val_loss": best_val_loss,
+            "best_epoch": best_epoch,
+            "epochs_without_improvement": epochs_without_improvement,
+            "improved": improved
         })
 
-        logger.info(f"Epoch {epoch}/{epochs} - train_loss={train_loss:.6f}, val_loss={val_loss:.6f}")
+        logger.info(f"Epoch {epoch}/{epochs} - train_loss={train_loss:.6f}, val_loss={val_loss:.6f}, best_val_loss={best_val_loss:.6f}, "
+                    f"best_epoch={best_epoch}, epochs_without_improvement={epochs_without_improvement}")
+
+        if early_stopping_enabled and early_stopping.should_stop:
+            logger.info(f"Early stopping triggered at epoch {epoch}. Best epoch: {early_stopping.best_epoch}, best_val_loss={early_stopping.best_loss:.6f}")
+            break
+
+    if early_stopping_enabled and early_stopping is not None:
+        early_stopping.restore_best_weights(model, device, logger)
 
     logger.info("Model training completed")
     return model, pd.DataFrame(history)
@@ -179,6 +258,22 @@ def set_seed(random_state: int, logger) -> None:
         torch.cuda.manual_seed_all(random_state)
 
     logger.info(f"PyTorch random seed set to: {random_state}")
+
+def get_training_summary(history_df: pd.DataFrame) -> dict:
+    if history_df.empty:
+        return {
+            "actual_epochs": None,
+            "best_epoch": None,
+            "best_val_loss": None
+        }
+
+    last_row = history_df.iloc[-1]
+
+    return {
+        "actual_epochs": int(history_df["epoch"].max()),
+        "best_epoch": int(last_row["best_epoch"]),
+        "best_val_loss": float(last_row["best_val_loss"])
+    }
 
 def evaluate_model(model, data_loader, split_name: str, threshold: float, device, logger) -> dict:
     logger.info(f"Evaluating model on {split_name} set")
@@ -277,9 +372,11 @@ def append_results_to_csv(results: dict, csv_path: Path) -> None:
 
         writer.writerow(row)
 
-def build_results_summary_row(metrics: dict, config: dict, model_params: dict | None) -> dict:
+def build_results_summary_row(metrics: dict, config: dict, model_params: dict | None, training_summary: dict | None) -> dict:
     if model_params is None:
         model_params = config["model"]
+    if training_summary is None:
+        training_summary = {}
 
     features_cfg = config["features"]
     prep_cfg = config["preprocessing"]
@@ -312,6 +409,13 @@ def build_results_summary_row(metrics: dict, config: dict, model_params: dict | 
         "epochs": model_params.get("epochs", model_cfg.get("epochs")),
         "weight_decay": model_params.get("weight_decay", model_cfg.get("weight_decay")),
         "device": model_params.get("device", model_cfg.get("device")),
+
+        "early_stopping": model_params.get("early_stopping", model_cfg.get("early_stopping")),
+        "patience": model_params.get("patience", model_cfg.get("patience")),
+        "min_delta": model_params.get("min_delta", model_cfg.get("min_delta")),
+        "actual_epochs": training_summary.get("actual_epochs"),
+        "best_epoch": training_summary.get("best_epoch"),
+        "best_val_loss": training_summary.get("best_val_loss"),
 
         "tuning_stage_1": config.get("tuning_stage_1", {}).get("enabled", False),
         "tuning_stage_2": config.get("tuning_stage_2", {}).get("enabled", False),
@@ -413,13 +517,24 @@ def plot_training_history(history_df: pd.DataFrame, config: dict, logger) -> Non
     output_dir.mkdir(parents=True, exist_ok=True)
     save_path = output_dir / "training_loss_curve.jpg"
 
+    early_stopping_enabled = config["model"].get("early_stopping", False)
+
     fig, ax = plt.subplots(figsize=(7, 4.5))
     ax.plot(history_df["epoch"], history_df["train_loss"], label="train_loss")
     ax.plot(history_df["epoch"], history_df["val_loss"], label="val_loss")
 
+    if early_stopping_enabled and not history_df.empty:
+        best_epoch = int(history_df.iloc[-1]["best_epoch"])
+        best_val_loss = float(history_df.iloc[-1]["best_val_loss"])
+
+        ax.axvline(best_epoch, linestyle="--", alpha=0.7, label=f"restored epoch={best_epoch}")
+        ax.scatter([best_epoch], [best_val_loss])
+        ax.set_title("MLP training history with early stopping")
+    else:
+        ax.set_title("MLP training history")
+
     ax.set_xlabel("Epoch")
     ax.set_ylabel("Loss")
-    ax.set_title("MLP training history")
     ax.legend()
     ax.grid(True, alpha=0.3)
 
@@ -458,6 +573,7 @@ def main() -> None:
 
     model, history_df = train_model(model, train_loader, val_loader, config, device, logger)
 
+    training_summary = get_training_summary(history_df)
     save_training_history(history_df, config, logger)
     threshold = config["model"].get("decision_threshold", 0.5)
     val_metrics = evaluate_model(model, val_loader, "Validation", threshold, device, logger)
@@ -465,7 +581,8 @@ def main() -> None:
     summary_row = build_results_summary_row(
         metrics=val_metrics,
         config=config,
-        model_params=config["model"]
+        model_params=config["model"],
+        training_summary=training_summary
     )
 
     summary_csv_path = BASE_DIR / config["output"]["summary_path"]
