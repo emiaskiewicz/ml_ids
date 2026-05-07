@@ -98,7 +98,7 @@ class EarlyStopping:
         else:
             self.epochs_without_improvement += 1
 
-        if self.enabled and self.epochs_without_improvement >= self.patience:
+        if self.epochs_without_improvement >= self.patience:
             self.should_stop = True
 
         return improved
@@ -569,6 +569,36 @@ def save_training_history(history_df: pd.DataFrame, config: dict, logger) -> Non
     history_df.to_csv(save_path, index=False)
     logger.info(f"Saved training history to: {save_path}")
 
+def evaluate_and_save_split(model, data_loader, split_name: str, threshold: float, device, config: dict, logger: logging.Logger,
+                            training_summary: dict | None = None) -> dict:
+    metrics = evaluate_model(
+        model=model,
+        data_loader=data_loader,
+        split_name=split_name,
+        threshold=threshold,
+        device=device,
+        logger=logger
+    )
+
+    summary_row = build_results_summary_row(
+        metrics=metrics,
+        config=config,
+        model_params=config["model"],
+        training_summary=training_summary
+    )
+
+    summary_csv_path = BASE_DIR / config["output"]["summary_path"]
+    append_results_to_csv(summary_row, summary_csv_path)
+    logger.info(f"Added {split_name} results to summary CSV: {summary_csv_path}")
+
+    if config["output"]["save_metrics"]:
+        save_metrics(metrics, config, logger)
+
+    if config["output"]["save_plots"]:
+        save_visualizations(metrics, config, logger)
+
+    return metrics
+
 def main() -> None:
     config = load_config(CONFIG_PATH)
     logger = get_logger(config)
@@ -580,38 +610,45 @@ def main() -> None:
     X_train, X_val, X_test, y_train, y_val, y_test = prepare_mlp_data(config)
     logger.info("Data prepared successfully")
 
-    batch_size = config["model"]["batch_size"]
+    stage_1_enabled = config.get("tuning_stage_1", {}).get("enabled", False)
+    stage_2_enabled = config.get("tuning_stage_2", {}).get("enabled", False)
 
-    train_loader = create_dataloader(X_train, y_train, batch_size=batch_size, shuffle=True)
-    val_loader = create_dataloader(X_val, y_val, batch_size=batch_size, shuffle=False)
-    test_loader = create_dataloader(X_test, y_test, batch_size=batch_size, shuffle=False)
+    if stage_2_enabled and not stage_1_enabled:
+        logger.critical("Tuning stage 2 cannot be enabled without tuning stage 1")
+        exit(1)
 
-    model = build_model(X_train.shape[1], config, {}, logger)
+    if stage_1_enabled:
+        logger.info("Tuning mode enabled")
 
-    model, history_df = train_model(model, train_loader, val_loader, config, device, logger)
+        if stage_2_enabled:
+            logger.info("Tuning stage 2 is enabled")
 
-    training_summary = get_training_summary(history_df)
-    save_training_history(history_df, config, logger)
-    threshold = config["model"].get("decision_threshold", 0.5)
-    val_metrics = evaluate_model(model, val_loader, "Validation", threshold, device, logger)
+        logger.critical("MLP tuning stage 1 and stage 2 are not implemented yet")
+        exit(1)
 
-    summary_row = build_results_summary_row(
-        metrics=val_metrics,
-        config=config,
-        model_params=config["model"],
-        training_summary=training_summary
-    )
+    else:
+        logger.info("Standard run mode")
 
-    summary_csv_path = BASE_DIR / config["output"]["summary_path"]
-    append_results_to_csv(summary_row, summary_csv_path)
-    logger.info(f"Added experiment results to summary CSV: {summary_csv_path}")
+        batch_size = config["model"]["batch_size"]
+        train_loader = create_dataloader(X_train, y_train, batch_size=batch_size, shuffle=True)
 
-    if config["output"]["save_metrics"]:
-        save_metrics(val_metrics, config, logger)
+        val_loader = create_dataloader(X_val, y_val, batch_size=batch_size, shuffle=False)
 
-    if config["output"]["save_plots"]:
-        save_visualizations(val_metrics, config, logger)
-        plot_training_history(history_df, config, logger)
+        model = build_model(input_dim=X_train.shape[1], config=config, overrides={}, logger=logger)
+
+        model, history_df = train_model(model=model, train_loader=train_loader, val_loader=val_loader, config=config,
+            device=device, logger=logger)
+
+        training_summary = get_training_summary(history_df)
+        save_training_history(history_df, config, logger)
+
+        threshold = config["model"].get("decision_threshold", 0.5)
+
+        evaluate_and_save_split(model=model, data_loader=val_loader, split_name="Validation", threshold=threshold,
+                                device=device, config=config, logger=logger, training_summary=training_summary)
+
+        if config["output"]["save_plots"]:
+            plot_training_history(history_df, config, logger)
 
     winsound.Beep(2500,1000)
 
