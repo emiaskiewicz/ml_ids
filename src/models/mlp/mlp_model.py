@@ -599,6 +599,142 @@ def evaluate_and_save_split(model, data_loader, split_name: str, threshold: floa
 
     return metrics
 
+def tune_decision_threshold(y_true: list[int], y_proba: list[float], metric_name: str, start: float, stop: float,
+                            step: float, logger: logging.Logger) -> tuple[float, pd.DataFrame]:
+    metric_name = metric_name.lower()
+
+    if metric_name not in ["accuracy", "precision", "recall", "f1"]:
+        logger.critical(f"Unsupported threshold tuning metric: {metric_name}. Use one of: accuracy, precision, recall, f1")
+        exit(1)
+    if step <= 0:
+        logger.critical("threshold_step must be greater than 0")
+        exit(1)
+    if start >= stop:
+        logger.critical("threshold_start must be lower than threshold_stop")
+        exit(1)
+
+    logger.info(f"Starting decision threshold tuning: metric={metric_name}, start={start}, stop={stop}, step={step}")
+
+    results = []
+    best_threshold = start
+    best_metric_value = -1.0
+    threshold = start
+
+    while threshold <= stop + 1e-9:
+        threshold = round(threshold, 6)
+
+        y_pred = apply_threshold(y_proba, threshold)
+        metrics = calculate_binary_metrics(y_true, y_pred, y_proba)
+        selected_metric_value = metrics[metric_name]
+
+        results.append({
+            "threshold": threshold,
+            "accuracy": metrics["accuracy"],
+            "precision": metrics["precision"],
+            "recall": metrics["recall"],
+            "f1": metrics["f1"],
+            "roc_auc": metrics["roc_auc"],
+            "average_precision": metrics["average_precision"],
+            "selected_metric": selected_metric_value
+        })
+
+        logger.info(f"Threshold={threshold:.4f} - accuracy={metrics['accuracy']:.4f}, precision={metrics['precision']:.4f}, "
+                    f"recall={metrics['recall']:.4f}, f1={metrics['f1']:.4f}, {metric_name}={selected_metric_value:.4f}")
+
+        if selected_metric_value > best_metric_value:
+            best_metric_value = selected_metric_value
+            best_threshold = threshold
+
+        threshold += step
+
+    results_df = pd.DataFrame(results)
+
+    logger.info(f"Best decision threshold: {best_threshold:.4f} with {metric_name}={best_metric_value:.4f}")
+
+    return best_threshold, results_df
+
+def save_threshold_tuning_results(results_df: pd.DataFrame, best_threshold: float, config: dict, logger: logging.Logger) -> None:
+    output_dir = BASE_DIR / config["output"]["output_dir"]
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    csv_path = output_dir / "threshold_tuning_results.csv"
+    json_path = output_dir / "threshold_tuning_best_params.json"
+
+    results_df.to_csv(csv_path, index=False)
+
+    best_params = {
+        "decision_threshold": best_threshold,
+        "metric": config.get("tuning_stage_2", {}).get("metric", "f1")
+    }
+
+    with json_path.open("w", encoding="utf-8") as file:
+        json.dump(best_params, file, indent=4, ensure_ascii=False)
+
+    logger.info(f"Saved threshold tuning results to: {csv_path}")
+    logger.info(f"Saved best threshold params to: {json_path}")
+
+def plot_threshold_tuning_results(results_df: pd.DataFrame, metric_name: str, config: dict, logger: logging.Logger) -> None:
+    output_dir = BASE_DIR / config["output"]["output_dir"]
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    metric_name = metric_name.lower()
+    save_path = output_dir / "threshold_tuning_curve.jpg"
+
+    if metric_name not in results_df.columns:
+        logger.warning(f"Skipping threshold tuning plot: metric {metric_name} not found in results")
+        return
+
+    best_idx = results_df[metric_name].idxmax()
+    best_threshold = results_df.loc[best_idx, "threshold"]
+    best_metric_value = results_df.loc[best_idx, metric_name]
+
+    fig, ax = plt.subplots(figsize=(7, 4.5))
+    ax.plot(results_df["threshold"], results_df[metric_name], marker="o", label=metric_name)
+    ax.axvline(best_threshold, linestyle="--", alpha=0.7, label=f"best threshold={best_threshold:.2f}")
+    ax.scatter([best_threshold], [best_metric_value])
+
+    ax.set_xlabel("Decision threshold")
+    ax.set_ylabel(metric_name)
+    ax.set_title(f"Decision threshold tuning - {metric_name}")
+    ax.legend()
+    ax.grid(True, alpha=0.3)
+
+    plt.tight_layout()
+    plt.savefig(save_path, dpi=300, bbox_inches="tight")
+    plt.close(fig)
+
+    logger.info(f"Saved threshold tuning plot to: {save_path}")
+
+def tuning_stage_2(model, val_loader, config: dict, device, logger: logging.Logger) -> tuple[dict, pd.DataFrame]:
+    logger.info("Starting MLP tuning stage 2.")
+
+    stage_2_cfg = config["tuning_stage_2"]
+    metric_name = stage_2_cfg["metric"]
+
+    y_true, y_proba = predict_proba(model, val_loader, device)
+
+    best_threshold, threshold_results_df = tune_decision_threshold(
+        y_true=y_true,
+        y_proba=y_proba,
+        metric_name=metric_name,
+        start=stage_2_cfg["threshold_start"],
+        stop=stage_2_cfg["threshold_stop"],
+        step=stage_2_cfg["threshold_step"],
+        logger=logger
+    )
+
+    best_params = {
+        "decision_threshold": best_threshold,
+        "metric": metric_name
+    }
+
+    save_threshold_tuning_results(results_df=threshold_results_df, best_threshold=best_threshold, config=config, logger=logger)
+    plot_threshold_tuning_results(results_df=threshold_results_df, metric_name=metric_name, config=config, logger=logger)
+
+    logger.info(f"MLP tuning stage 2 completed. Best threshold={best_threshold:.4f}, metric={metric_name}")
+
+    return best_params, threshold_results_df
+
 def main() -> None:
     config = load_config(CONFIG_PATH)
     logger = get_logger(config)
@@ -625,6 +761,32 @@ def main() -> None:
 
         logger.critical("MLP tuning stage 1 and stage 2 are not implemented yet")
         exit(1)
+
+        #mockup tuning pipeline
+        # best_stage_1_params, best_stage_1_model, stage_1_results_df, history_df = tuning_stage_1(
+        #     X_train=X_train,
+        #     y_train=y_train,
+        #     X_val=X_val,
+        #     y_val=y_val,
+        #     config=config,
+        #     device=device,
+        #     logger=logger
+        # )
+        #
+        # batch_size = best_stage_1_params["batch_size"]
+        # val_loader = create_dataloader(X_val, y_val, batch_size=batch_size, shuffle=False)
+        #
+        # best_threshold = config["model"]["decision_threshold"]
+        #
+        # if stage_2_enabled:
+        #     best_stage_2_params, stage_2_results_df = tuning_stage_2(
+        #         model=best_stage_1_model,
+        #         val_loader=val_loader,
+        #         config=config,
+        #         device=device,
+        #         logger=logger
+        #     )
+        #     best_threshold = best_stage_2_params["decision_threshold"]
 
     else:
         logger.info("Standard run mode")
