@@ -15,6 +15,9 @@ import matplotlib.pyplot as plt
 import json
 import pandas as pd
 from torch.optim.lr_scheduler import ReduceLROnPlateau
+import copy
+from itertools import product
+import numpy as np
 
 BASE_DIR = Path(__file__).resolve().parents[3]
 CONFIG_PATH = BASE_DIR / "config" / "mlp.yaml"
@@ -22,7 +25,7 @@ CONFIG_PATH = BASE_DIR / "config" / "mlp.yaml"
 RESULTS_COLUMNS = ["experiment", "dataset_variant", "split", "accuracy", "precision", "recall", "f1", "roc_auc",
                    "average_precision", "threshold", "scaling", "scaler", "feature_selection", "feature_selection_method",
                    "selected_k_features", "smote", "use_pos_weight", "pos_weight_mode", "pos_weight_value", "hidden_layers",
-                   "activation", "dropout", "learning_rate", "batch_size", "epochs", "scheduler_enabled", "scheduler_factor",
+                   "activation", "batch_norm", "dropout", "learning_rate", "batch_size", "epochs", "scheduler_enabled", "scheduler_factor",
                    "scheduler_patience", "scheduler_min_lr", "weight_decay", "device", "early_stopping", "patience",
                    "min_delta", "actual_epochs", "best_epoch", "best_val_loss", "tuning_stage_1", "tuning_stage_2"]
 
@@ -395,7 +398,7 @@ def evaluate_model(model, data_loader, split_name: str, threshold: float, device
     logger.info(f"Evaluating model on {split_name} set")
 
     y_true, y_proba = predict_proba(model, data_loader, device)
-    y_pred = apply_threshold(y_proba, threshold)
+    y_pred = (np.array(y_proba) >= threshold).astype(int).tolist()
 
     metrics = calculate_binary_metrics(y_true, y_pred, y_proba)
     cm = confusion_matrix(y_true, y_pred)
@@ -632,9 +635,6 @@ def save_visualizations(metrics: dict, config: dict, logger: logging.Logger, his
         plot_training_history(history_df, config, logger)
         plot_learning_rate_curve(history_df, config, logger)
 
-def apply_threshold(y_proba: pd.Series | list, threshold: float) -> list:
-    return [1 if prob >= threshold else 0 for prob in y_proba]
-
 def calculate_binary_metrics(y_true, y_pred, y_proba) -> dict:
     return {
         "accuracy": accuracy_score(y_true, y_pred),
@@ -710,7 +710,10 @@ def plot_learning_rate_curve(history_df: pd.DataFrame, config: dict, logger) -> 
     logger.info(f"Saved learning rate curve to: {save_path}")
 
 def evaluate_and_save_split(model, data_loader, split_name: str, threshold: float, device, config: dict, logger: logging.Logger,
-                            training_summary: dict | None = None, history_df: pd.DataFrame | None = None) -> dict:
+                            training_summary: dict | None = None, history_df: pd.DataFrame | None = None, model_params: dict | None = None) -> dict:
+    if model_params is None:
+        model_params = config["model"]
+
     metrics = evaluate_model(
         model=model,
         data_loader=data_loader,
@@ -723,7 +726,7 @@ def evaluate_and_save_split(model, data_loader, split_name: str, threshold: floa
     summary_row = build_results_summary_row(
         metrics=metrics,
         config=config,
-        model_params=config["model"],
+        model_params=model_params,
         training_summary=training_summary
     )
 
@@ -741,6 +744,140 @@ def evaluate_and_save_split(model, data_loader, split_name: str, threshold: floa
         save_predictions(metrics, config, logger)
 
     return metrics
+
+def get_tuning_param_grid(config: dict, logger: logging.Logger) -> list[dict]:
+    param_grid_cfg = config["tuning_stage_1"]["param_grid"]
+
+    for param_name, values in param_grid_cfg.items():
+        if not isinstance(values, list) or len(values) == 0:
+            logger.critical(f"Invalid tuning values for parameter '{param_name}'. Expected non-empty list")
+            exit(1)
+
+    param_names = list(param_grid_cfg.keys())
+    param_values = [param_grid_cfg[param_name] for param_name in param_names]
+
+    param_grid = [
+        dict(zip(param_names, combination))
+        for combination in product(*param_values)
+    ]
+
+    logger.info(f"Generated {len(param_grid)} MLP tuning combinations")
+    logger.info(f"Tuned parameters: {param_names}")
+
+    return param_grid
+
+def run_single_mlp_experiment(params: dict, X_train, X_val, y_train, y_val, config: dict, device, logger: logging.Logger) -> tuple[dict, nn.Module, pd.DataFrame, dict]:
+    experiment_config = copy.deepcopy(config)
+    experiment_config["model"].update(params)
+
+    logger.info(f"Running MLP tuning experiment with params: {params}")
+
+    set_seed(experiment_config["experiment"]["random_state"], logger)
+    batch_size = experiment_config["model"]["batch_size"]
+
+    train_loader = create_dataloader(X_train, y_train, batch_size=batch_size, shuffle=True)
+
+    val_loader = create_dataloader(X_val, y_val, batch_size=batch_size, shuffle=False)
+
+    model = build_model(input_dim=X_train.shape[1], config=experiment_config, overrides={}, logger=logger)
+
+    model, history_df, loss_info = train_model(model=model, train_loader=train_loader, val_loader=val_loader, y_train=y_train,
+                                               config=experiment_config, device=device, logger=logger)
+
+    training_summary = get_training_summary(history_df)
+    training_summary.update(loss_info)
+
+    threshold = experiment_config["model"]["decision_threshold"]
+
+    val_metrics = evaluate_model(model=model, data_loader=val_loader, split_name="Validation", threshold=threshold,
+                                 device=device, logger=logger)
+
+    result_row = build_results_summary_row(metrics=val_metrics, config=config, model_params=params, training_summary=training_summary)
+
+    return result_row, model, history_df, training_summary
+
+def tuning_stage_1(X_train, y_train, X_val, y_val, config: dict, device, logger: logging.Logger) -> tuple[dict, nn.Module, pd.DataFrame, pd.DataFrame, dict]:
+    logger.info("Starting MLP tuning stage 1")
+
+    metric_name = config["tuning_stage_1"]["metric"]
+    param_grid = get_tuning_param_grid(config, logger)
+    results = []
+    best_metric_value = -1.0
+    best_params = None
+    best_model = None
+    best_history_df = None
+    best_training_summary = None
+
+    for trial_number, params in enumerate(param_grid, start=1):
+        logger.info(f"Starting MLP tuning trial {trial_number}/{len(param_grid)}")
+
+        result_row, model, history_df, training_summary = run_single_mlp_experiment(params=params, X_train=X_train,
+                                    X_val=X_val, y_train=y_train, y_val=y_val, config=config, device=device, logger=logger)
+
+        selected_metric_value = result_row[metric_name]
+
+        result_row["trial"] = trial_number
+        result_row["selected_metric"] = selected_metric_value
+        results.append(result_row)
+
+        logger.info(f"Tuning trial {trial_number}/{len(param_grid)} completed - {metric_name}={selected_metric_value:.4f}, params={params}")
+
+        if selected_metric_value > best_metric_value:
+            best_metric_value = selected_metric_value
+            best_params = params
+            best_model = model
+            best_history_df = history_df
+            best_training_summary = training_summary
+
+            logger.info(f"New best MLP tuning result: {metric_name}={best_metric_value:.4f}, params={best_params}")
+
+    results_df = pd.DataFrame(results)
+
+    logger.info(f"MLP tuning stage 1 completed. Best {metric_name}={best_metric_value:.4f}, best_params={best_params}")
+
+    return best_params, best_model, results_df, best_history_df, best_training_summary
+
+def plot_tuning_stage_1(results_df: pd.DataFrame, config: dict, logger: logging.Logger) -> None:
+    output_dir = BASE_DIR / config["output"]["output_dir"]
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    metric_name = config["tuning_stage_1"]["metric"]
+    save_path = output_dir / "tuning_stage1_metric_curve.jpg"
+
+    best_idx = results_df[metric_name].idxmax()
+    best_trial = results_df.loc[best_idx, "trial"]
+    best_metric_value = results_df.loc[best_idx, metric_name]
+
+    fig, ax = plt.subplots(figsize=(7, 4.5))
+    ax.plot(results_df["trial"], results_df[metric_name], marker="o", label=metric_name)
+    ax.axvline(best_trial, linestyle="--", alpha=0.7, label=f"best trial={int(best_trial)}")
+    ax.scatter([best_trial], [best_metric_value])
+
+    ax.set_xlabel("Tuning trial")
+    ax.set_ylabel(metric_name)
+    ax.set_title(f"MLP tuning stage 1 - {metric_name}")
+    ax.legend()
+    ax.grid(True, alpha=0.3)
+
+    plt.tight_layout()
+    plt.savefig(save_path, dpi=300, bbox_inches="tight")
+    plt.close(fig)
+
+    logger.info(f"Saved tuning stage 1 plot to: {save_path}")
+
+def save_stage_results(results_df: pd.DataFrame, best_params: dict, output_dir: Path, stage: str, logger) -> None:
+    path = BASE_DIR / output_dir
+    path.mkdir(parents=True, exist_ok=True)
+    csv_path = path / f"tuning_stage{stage}_results.csv"
+    json_path = path / f"tuning_stage{stage}_params.json"
+
+    results_df.to_csv(csv_path, index=False)
+    logger.info(f"Saved tuning stage {stage} results to: {csv_path}")
+
+    with json_path.open("w", encoding="utf-8") as file:
+        json.dump(best_params, file, indent=4, ensure_ascii=False)
+
+    logger.info(f"Saved tuning stage {stage} best params to: {json_path}")
 
 def tune_decision_threshold(y_true: list[int], y_proba: list[float], metric_name: str, start: float, stop: float,
                             step: float, logger: logging.Logger) -> tuple[float, pd.DataFrame]:
@@ -766,7 +903,7 @@ def tune_decision_threshold(y_true: list[int], y_proba: list[float], metric_name
     while threshold <= stop + 1e-9:
         threshold = round(threshold, 6)
 
-        y_pred = apply_threshold(y_proba, threshold)
+        y_pred = y_pred = (np.array(y_proba) >= threshold).astype(int).tolist()
         metrics = calculate_binary_metrics(y_true, y_pred, y_proba)
         selected_metric_value = metrics[metric_name]
 
@@ -917,38 +1054,37 @@ def main() -> None:
     if stage_1_enabled:
         logger.info("Tuning mode enabled")
 
+        best_stage_1_params, best_stage_1_model, stage_1_results_df, best_history_df, best_training_summary = tuning_stage_1(
+            X_train=X_train, y_train=y_train, X_val=X_val, y_val=y_val, config=config, device=device, logger=logger)
+
+        if config["output"]["save_tuning_results"]:
+            save_stage_results(results_df=stage_1_results_df, best_params=best_stage_1_params, output_dir=config["output"]["output_dir"], stage="1", logger=logger)
+
+        if config["output"]["save_plots"]:
+            plot_tuning_stage_1(stage_1_results_df, config, logger)
+
+        save_training_history(best_history_df, config, logger)
+
+        best_config = copy.deepcopy(config)
+        best_config["model"].update(best_stage_1_params)
+
+        best_threshold = best_config["model"]["decision_threshold"]
+
+        val_loader = create_dataloader(X_val, y_val, batch_size=best_config["model"]["batch_size"], shuffle=False)
+
+        test_loader = create_dataloader(X_test, y_test, batch_size=best_config["model"]["batch_size"], shuffle=False)
+
         if stage_2_enabled:
             logger.info("Tuning stage 2 is enabled")
 
-        logger.critical("MLP tuning stage 1 and stage 2 are not implemented yet")
-        exit(1)
+            best_stage_2_params, stage_2_results_df = tuning_stage_2(model=best_stage_1_model, val_loader=val_loader,
+                config=config, device=device, logger=logger)
 
-        #mockup tuning pipeline
-        # best_stage_1_params, best_stage_1_model, stage_1_results_df, history_df = tuning_stage_1(
-        #     X_train=X_train,
-        #     y_train=y_train,
-        #     X_val=X_val,
-        #     y_val=y_val,
-        #     config=config,
-        #     device=device,
-        #     logger=logger
-        # )
-        #
-        # batch_size = best_stage_1_params["batch_size"]
-        # val_loader = create_dataloader(X_val, y_val, batch_size=batch_size, shuffle=False)
-        #
-        # best_threshold = config["model"]["decision_threshold"]
-        #
-        # if stage_2_enabled:
-        #     best_stage_2_params, stage_2_results_df = tuning_stage_2(
-        #         model=best_stage_1_model,
-        #         val_loader=val_loader,
-        #         config=config,
-        #         device=device,
-        #         logger=logger
-        #     )
-        #     best_threshold = best_stage_2_params["decision_threshold"]
+            best_threshold = best_stage_2_params["decision_threshold"]
 
+        evaluate_and_save_split(model=best_stage_1_model, data_loader=test_loader, split_name="Test", threshold=best_threshold,
+                                device=device, config=config, logger=logger, training_summary=best_training_summary,
+                                history_df=best_history_df, model_params=best_stage_1_params)
     else:
         logger.info("Standard run mode")
 
