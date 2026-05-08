@@ -425,55 +425,29 @@ def evaluate_model(model, data_loader, split_name: str, threshold: float, device
         "y_proba": y_proba
     }
 
-def save_to_txt(metrics: dict, exp_name: str, path: Path):
-    txt_content = [
-        f"Experiment: {exp_name}",
-        f"Split: {metrics['split_name']}",
-        f"Accuracy: {metrics['accuracy']:.4f}",
-        f"Precision: {metrics['precision']:.4f}",
-        f"Recall: {metrics['recall']:.4f}",
-        f"F1-score: {metrics['f1']:.4f}",
-        f"ROC-AUC: {metrics['roc_auc']:.4f}" if metrics["roc_auc"] is not None else "ROC-AUC: None",
-        f"Average Precision: {metrics['average_precision']:.4f}" if metrics["average_precision"] is not None else "Average Precision: None",
-        "",
-        "Confusion Matrix:", str(metrics["confusion_matrix"]),
-        "",
-        "Classification Report:",metrics["classification_report"]
-    ]
-
-    with path.open("w", encoding="utf-8") as file:
-        file.write("\n".join(txt_content))
-
-def save_to_json(metrics: dict, exp_name: str, path: Path):
-    json_ready = {
-        "experiment_name": exp_name,
-        "split_name": metrics["split_name"],
-        "accuracy": metrics["accuracy"],
-        "precision": metrics["precision"],
-        "recall": metrics["recall"],
-        "f1": metrics["f1"],
-        "roc_auc": metrics["roc_auc"],
-        "average_precision": metrics["average_precision"],
-        "confusion_matrix": metrics["confusion_matrix"].tolist(),
-        "classification_report": metrics["classification_report"]
-    }
-
-    with path.open("w", encoding="utf-8") as file:
-        json.dump(json_ready, file, indent=4, ensure_ascii=False)
-
 def save_metrics(metrics: dict, config: dict, logger: logging.Logger) -> None:
     path = BASE_DIR / config["output"]["output_dir"]
     path.mkdir(parents=True, exist_ok=True)
+
     split_name = metrics["split_name"].lower()
+    exp_name = config["experiment"]["name"]
+
+    json_path = path / f"{split_name}_metrics.json"
+    with json_path.open("w", encoding="utf-8") as file:
+        json_data = {**metrics, "confusion_matrix": metrics["confusion_matrix"].tolist()}
+        json.dump(json_data, file, indent=4, ensure_ascii=False)
+    logger.info(f"Saved metrics JSON to: {json_path}")
 
     txt_path = path / f"{split_name}_metrics.txt"
-    json_path = path / f"{split_name}_metrics.json"
-
-    save_to_txt(metrics, config["experiment"]["name"], txt_path)
+    with txt_path.open("w", encoding="utf-8") as file:
+        file.write(f"Experiment: {exp_name}\nSplit: {metrics['split_name']}\n")
+        file.write(f"Accuracy: {metrics['accuracy']:.4f}\nPrecision: {metrics['precision']:.4f}\n")
+        file.write(f"Recall: {metrics['recall']:.4f}\nF1-score: {metrics['f1']:.4f}\n")
+        roc_auc = metrics.get('roc_auc')
+        file.write(f"ROC-AUC: {roc_auc:.4f}\n" if roc_auc is not None else "ROC-AUC: None\n")
+        file.write(f"\nConfusion Matrix:\n{metrics['confusion_matrix']}\n\n")
+        file.write(f"Classification Report:\n{metrics['classification_report']}\n")
     logger.info(f"Saved metrics to: {txt_path}")
-
-    save_to_json(metrics, config["experiment"]["name"], json_path)
-    logger.info(f"Saved metrics JSON to: {json_path}")
 
 def append_results_to_csv(results: dict, csv_path: Path) -> None:
     csv_path.parent.mkdir(parents=True, exist_ok=True)
@@ -495,16 +469,20 @@ def build_results_summary_row(metrics: dict, config: dict, model_params: dict | 
     if model_params is None:
         model_params = config["model"]
     if training_summary is None:
-        training_summary = {
-            "actual_epochs": None,
-            "best_epoch": None,
-            "best_val_loss": None,
-            "pos_weight_value": None
-        }
+        training_summary = {}
 
+    model_cfg = config["model"].copy()
+    model_cfg.update(model_params)
+
+    training_cfg = {
+        "actual_epochs": None,
+        "best_epoch": None,
+        "best_val_loss": None,
+        "pos_weight_value": None
+    }
+    training_cfg.update(training_summary)
     features_cfg = config["features"]
     prep_cfg = config["preprocessing"]
-    model_cfg = config["model"]
 
     return {
         "experiment": config["experiment"]["name"],
