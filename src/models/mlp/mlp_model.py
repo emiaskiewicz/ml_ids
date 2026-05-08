@@ -664,6 +664,9 @@ def evaluate_and_save_split(model, data_loader, split_name: str, threshold: floa
     if config["output"]["save_plots"]:
         save_visualizations(metrics, config, logger)
 
+    if config["output"]["save_predictions"]:
+        save_predictions(metrics, config, logger)
+
     return metrics
 
 def tune_decision_threshold(y_true: list[int], y_proba: list[float], metric_name: str, start: float, stop: float,
@@ -801,6 +804,24 @@ def tuning_stage_2(model, val_loader, config: dict, device, logger: logging.Logg
     logger.info(f"MLP tuning stage 2 completed. Best threshold={best_threshold:.4f}, metric={metric_name}")
 
     return best_params, threshold_results_df
+
+def save_predictions(metrics: dict, config: dict, logger: logging.Logger) -> None:
+    output_dir = BASE_DIR / config["output"]["output_dir"]
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    split_name = metrics["split_name"].lower()
+    save_path = output_dir / f"{split_name}_predictions.csv"
+
+    predictions_df = pd.DataFrame({
+        "y_true": metrics["y_true"],
+        "y_proba": metrics["y_proba"],
+        "y_pred": metrics["y_pred"],
+        "threshold": metrics["threshold_used"]
+    })
+
+    predictions_df.to_csv(save_path, index=False)
+
+    logger.info(f"Saved {metrics['split_name']} predictions to: {save_path}")
 
 def main() -> None:
     config = load_config(CONFIG_PATH)
