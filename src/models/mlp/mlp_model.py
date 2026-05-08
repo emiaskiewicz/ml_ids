@@ -20,9 +20,9 @@ CONFIG_PATH = BASE_DIR / "config" / "mlp.yaml"
 
 RESULTS_COLUMNS = ["experiment", "dataset_variant", "split", "accuracy", "precision", "recall", "f1", "roc_auc",
                    "average_precision", "threshold", "scaling", "scaler", "feature_selection", "feature_selection_method",
-                   "selected_k_features", "smote", "hidden_layers", "activation", "dropout", "learning_rate", "batch_size", "epochs",
-                   "weight_decay", "device", "early_stopping", "patience", "min_delta", "actual_epochs", "best_epoch",
-                   "best_val_loss", "tuning_stage_1", "tuning_stage_2"]
+                   "selected_k_features", "smote", "use_pos_weight", "pos_weight_mode", "pos_weight_value", "hidden_layers",
+                   "activation", "dropout", "learning_rate", "batch_size", "epochs", "weight_decay", "device", "early_stopping",
+                   "patience", "min_delta", "actual_epochs", "best_epoch", "best_val_loss", "tuning_stage_1", "tuning_stage_2"]
 
 def load_config(config_path: Path) -> dict:
     with config_path.open("r", encoding="utf-8") as file:
@@ -156,10 +156,69 @@ def calculate_loss(model, data_loader, criterion, device) -> float:
 
     return total_loss / len(data_loader.dataset)
 
-def train_model(model, train_loader, val_loader, config: dict, device, logger):
+def calculate_pos_weight(y_train: pd.Series, device, logger: logging.Logger) -> tuple[torch.Tensor, float]:
+    negative_count = int((y_train == 0).sum())
+    positive_count = int((y_train == 1).sum())
+
+    if negative_count == 0:
+        logger.critical("Cannot calculate pos_weight: no negative class samples found in y_train")
+        exit(1)
+
+    if positive_count == 0:
+        logger.critical("Cannot calculate pos_weight: no positive class samples found in y_train")
+        exit(1)
+
+    pos_weight_value = negative_count / positive_count
+    pos_weight = torch.tensor([pos_weight_value], dtype=torch.float32, device=device)
+
+    logger.info(f"Calculated pos_weight={pos_weight_value:.6f} from y_train: negative_count={negative_count}, "
+                f"positive_count={positive_count}")
+
+    return pos_weight, pos_weight_value
+
+def build_loss_function(y_train: pd.Series, config: dict, device, logger: logging.Logger) -> tuple[nn.Module, dict]:
     model_cfg = config["model"]
 
-    criterion = nn.BCEWithLogitsLoss()
+    loss_info = {
+        "use_pos_weight": model_cfg["use_pos_weight"],
+        "pos_weight_mode": model_cfg["pos_weight_mode"],
+        "pos_weight_value": None
+    }
+
+    if not model_cfg["use_pos_weight"]:
+        logger.info("Using BCEWithLogitsLoss without pos_weight")
+        return nn.BCEWithLogitsLoss(), loss_info
+
+    if config["preprocessing"]["smote"]:
+        logger.warning("SMOTE and pos_weight are both enabled.")
+
+    pos_weight_mode = model_cfg["pos_weight_mode"]
+
+    if pos_weight_mode == "auto":
+        pos_weight, pos_weight_value = calculate_pos_weight(y_train, device, logger)
+    elif pos_weight_mode == "manual":
+        pos_weight_value = float(model_cfg["pos_weight_value"])
+
+        if pos_weight_value <= 0:
+            logger.critical("pos_weight_value must be greater than 0 when pos_weight_mode is manual")
+            exit(1)
+
+        pos_weight = torch.tensor([pos_weight_value], dtype=torch.float32, device=device)
+        logger.info(f"Using manual pos_weight={pos_weight_value:.6f}")
+    else:
+        logger.critical(f"Unsupported pos_weight_mode: {pos_weight_mode}. Use 'auto' or 'manual'")
+        exit(1)
+
+    loss_info["pos_weight_value"] = pos_weight_value
+
+    logger.info(f"Using BCEWithLogitsLoss with pos_weight={pos_weight_value:.6f}, mode={pos_weight_mode}")
+
+    return nn.BCEWithLogitsLoss(pos_weight=pos_weight), loss_info
+
+def train_model(model, train_loader, val_loader, y_train: pd.Series, config: dict, device, logger):
+    model_cfg = config["model"]
+
+    criterion, loss_info = build_loss_function(y_train=y_train, config=config, device=device, logger=logger)
     optimizer = Adam(
         model.parameters(),
         lr=model_cfg["learning_rate"],
@@ -236,7 +295,7 @@ def train_model(model, train_loader, val_loader, config: dict, device, logger):
         early_stopping.restore_best_weights(model, device, logger)
 
     logger.info("Model training completed")
-    return model, pd.DataFrame(history)
+    return model, pd.DataFrame(history), loss_info
 
 def predict_proba(model, data_loader, device) -> tuple[list[int], list[float]]:
     model.eval()
@@ -392,7 +451,12 @@ def build_results_summary_row(metrics: dict, config: dict, model_params: dict | 
     if model_params is None:
         model_params = config["model"]
     if training_summary is None:
-        training_summary = {}
+        training_summary = {
+            "actual_epochs": None,
+            "best_epoch": None,
+            "best_val_loss": None,
+            "pos_weight_value": None
+        }
 
     features_cfg = config["features"]
     prep_cfg = config["preprocessing"]
@@ -417,6 +481,9 @@ def build_results_summary_row(metrics: dict, config: dict, model_params: dict | 
         "feature_selection_method": features_cfg.get("feature_selection_method", None),
         "selected_k_features": features_cfg.get("selected_k_features", None),
         "smote": prep_cfg.get("smote", False),
+        "use_pos_weight": model_params["use_pos_weight"],
+        "pos_weight_mode": model_params["pos_weight_mode"],
+        "pos_weight_value": training_summary["pos_weight_value"],
 
         "hidden_layers": model_params.get("hidden_layers", model_cfg.get("hidden_layers")),
         "activation": model_params.get("activation", model_cfg.get("activation")),
@@ -798,10 +865,11 @@ def main() -> None:
 
         model = build_model(input_dim=X_train.shape[1], config=config, overrides={}, logger=logger)
 
-        model, history_df = train_model(model=model, train_loader=train_loader, val_loader=val_loader, config=config,
-            device=device, logger=logger)
+        model, history_df, loss_info = train_model(model=model, train_loader=train_loader, val_loader=val_loader, y_train=y_train,
+                                                   config=config, device=device, logger=logger)
 
         training_summary = get_training_summary(history_df)
+        training_summary.update(loss_info)
         save_training_history(history_df, config, logger)
 
         threshold = config["model"].get("decision_threshold", 0.5)
