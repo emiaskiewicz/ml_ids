@@ -51,19 +51,27 @@ def get_activation_layer(activation_name: str) -> nn.Module:
     else:
         raise ValueError(f"Unsupported activation function: {activation_name}")
 
+def add_hidden_layer(layers: list, input_dim: int, output_dim: int, activation: str, dropout: float, batch_norm: bool) -> None:
+    layers.append(nn.Linear(input_dim, output_dim))
+
+    if batch_norm:
+        layers.append(nn.BatchNorm1d(output_dim))
+
+    layers.append(get_activation_layer(activation))
+
+    if dropout > 0:
+        layers.append(nn.Dropout(dropout))
+
 class MLPNetwork(nn.Module):
-    def __init__(self, input_dim: int, hidden_layers: list[int], dropout: float, activation: str):
+    def __init__(self, input_dim: int, hidden_layers: list[int], dropout: float, activation: str, batch_norm: bool):
         super().__init__()
 
         layers = []
         previous_dim = input_dim
 
         for hidden_dim in hidden_layers:
-            layers.append(nn.Linear(previous_dim, hidden_dim))
-            layers.append(get_activation_layer(activation))
-
-            if dropout > 0:
-                layers.append(nn.Dropout(dropout))
+            add_hidden_layer(layers=layers, input_dim=previous_dim, output_dim=hidden_dim, activation=activation, dropout=dropout,
+                             batch_norm=batch_norm)
 
             previous_dim = hidden_dim
 
@@ -123,13 +131,14 @@ def build_model(input_dim: int, config: dict, overrides: dict, logger) -> MLPNet
 
     logger.info("Building MLP model")
     logger.info(f"Model parameters: input_dim={input_dim}, hidden_layers={model_cfg['hidden_layers']}, "
-                f"dropout={model_cfg['dropout']}, activation={model_cfg['activation']}")
+                f"dropout={model_cfg['dropout']}, activation={model_cfg['activation']}, batch_norm={model_cfg['batch_norm']}")
 
     model = MLPNetwork(
         input_dim=input_dim,
         hidden_layers=model_cfg["hidden_layers"],
         dropout=model_cfg["dropout"],
-        activation=model_cfg.get("activation", "relu")
+        activation=model_cfg.get("activation", "relu"),
+        batch_norm=model_cfg["batch_norm"]
     )
 
     return model
