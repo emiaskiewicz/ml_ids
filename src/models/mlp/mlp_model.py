@@ -158,6 +158,7 @@ def create_dataloader(X, y, batch_size: int, shuffle: bool) -> DataLoader:
 def calculate_loss(model, data_loader, criterion, device) -> float:
     model.eval()
     total_loss = 0.0
+    total_samples = 0
 
     with torch.no_grad():
         for X_batch, y_batch in data_loader:
@@ -166,9 +167,11 @@ def calculate_loss(model, data_loader, criterion, device) -> float:
 
             logits = model(X_batch)
             loss = criterion(logits, y_batch)
-            total_loss += loss.item() * X_batch.size(0)
 
-    return total_loss / len(data_loader.dataset)
+            total_loss += loss.item() * X_batch.size(0)
+            total_samples += X_batch.size(0)
+
+        return total_loss / total_samples
 
 def calculate_pos_weight(y_train: pd.Series, device, logger: logging.Logger) -> tuple[torch.Tensor, float]:
     negative_count = int((y_train == 0).sum())
@@ -279,6 +282,7 @@ def train_model(model, train_loader, val_loader, y_train: pd.Series, config: dic
     for epoch in range(1, epochs + 1):
         model.train()
         train_loss = 0.0
+        total_samples = 0
 
         for X_batch, y_batch in train_loader:
             X_batch = X_batch.to(device)
@@ -291,8 +295,9 @@ def train_model(model, train_loader, val_loader, y_train: pd.Series, config: dic
             optimizer.step()
 
             train_loss += loss.item() * X_batch.size(0)
+            total_samples += X_batch.size(0)
 
-        train_loss = train_loss / len(train_loader.dataset)
+        train_loss = train_loss / total_samples
         val_loss = calculate_loss(model, val_loader, criterion, device)
 
         if scheduler is not None:
@@ -1011,6 +1016,42 @@ def save_predictions(metrics: dict, config: dict, logger: logging.Logger) -> Non
 
     logger.info(f"Saved {metrics['split_name']} predictions to: {save_path}")
 
+def train_final_model(model: nn.Module, train_loader: DataLoader, y_train_final: pd.Series, config: dict,
+                      device: torch.device, logger: logging.Logger, fixed_epochs: int) -> tuple[nn.Module, dict]:
+    model_cfg = config["model"]
+    criterion, loss_info = build_loss_function(y_train=y_train_final, config=config, device=device, logger=logger)
+    optimizer = Adam(
+        model.parameters(),
+        lr=model_cfg["learning_rate"],
+        weight_decay=model_cfg["weight_decay"]
+    )
+
+    model.to(device)
+    logger.info(f"Retraining final model on Train+Val for EXACTLY {fixed_epochs} epochs")
+
+    for epoch in range(1, fixed_epochs + 1):
+        model.train()
+        train_loss = 0.0
+        total_samples = 0
+        for X_batch, y_batch in train_loader:
+            X_batch = X_batch.to(device)
+            y_batch = y_batch.to(device)
+            optimizer.zero_grad()
+            logits = model(X_batch)
+            loss = criterion(logits, y_batch)
+            loss.backward()
+            optimizer.step()
+
+            train_loss += loss.item() * X_batch.size(0)
+            total_samples += X_batch.size(0)
+
+        train_loss = train_loss / total_samples
+
+        if epoch % 10 == 0 or epoch == fixed_epochs:
+            logger.info(f"Final Retrain - Epoch {epoch}/{fixed_epochs} - train_loss={train_loss:.6f}")
+
+    return model, loss_info
+
 def main() -> None:
     config = load_config(CONFIG_PATH)
     logger = get_logger(config)
@@ -1046,21 +1087,34 @@ def main() -> None:
         best_config = copy.deepcopy(config)
         best_config["model"].update(best_stage_1_params)
 
-        best_threshold = best_config["model"]["decision_threshold"]
+        logger.info("Preparing final train+val dataset for retraining")
+        X_train_final = pd.concat([X_train, X_val], axis=0)
+        y_train_final = pd.concat([y_train, y_val], axis=0)
+        logger.info(f"Final train+val shapes: X={X_train_final.shape}, y={y_train_final.shape}")
 
-        val_loader = create_dataloader(X_val, y_val, batch_size=best_config["model"]["batch_size"], shuffle=False)
+        batch_size = best_config["model"]["batch_size"]
+        train_final_loader = create_dataloader(X_train_final, y_train_final, batch_size=batch_size, shuffle=True)
+        test_loader = create_dataloader(X_test, y_test, batch_size=batch_size, shuffle=False)
 
-        test_loader = create_dataloader(X_test, y_test, batch_size=best_config["model"]["batch_size"], shuffle=False)
+        final_model = build_model(input_dim=X_train_final.shape[1], config=best_config, overrides={}, logger=logger)
+        best_epoch = int(best_training_summary["best_epoch"])
+
+        final_model, final_loss_info = train_final_model(model=final_model, train_loader=train_final_loader, y_train_final=y_train_final,
+                                                         config=best_config, device=device, logger=logger, fixed_epochs=best_epoch)
+
+        best_training_summary.update(final_loss_info)
+        best_threshold = best_config["model"].get("decision_threshold", 0.5)
 
         if stage_2_enabled:
             logger.info("Tuning stage 2 is enabled")
+            val_final_loader = create_dataloader(X_train_final, y_train_final, batch_size=batch_size, shuffle=False)
 
-            best_stage_2_params, stage_2_results_df = tuning_stage_2(model=best_stage_1_model, val_loader=val_loader,
+            best_stage_2_params, stage_2_results_df = tuning_stage_2(model=final_model, val_loader=val_final_loader,
                 config=config, device=device, logger=logger)
 
             best_threshold = best_stage_2_params["decision_threshold"]
 
-        evaluate_and_save_split(model=best_stage_1_model, data_loader=test_loader, split_name="Test", threshold=best_threshold,
+        evaluate_and_save_split(model=final_model, data_loader=test_loader, split_name="Test", threshold=best_threshold,
                                 device=device, config=config, logger=logger, training_summary=best_training_summary,
                                 history_df=best_history_df, model_params=best_stage_1_params)
     else:
