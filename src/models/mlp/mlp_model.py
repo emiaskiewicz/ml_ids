@@ -14,6 +14,7 @@ from sklearn.metrics import (accuracy_score, precision_score, recall_score, f1_s
 import matplotlib.pyplot as plt
 import json
 import pandas as pd
+from torch.optim.lr_scheduler import ReduceLROnPlateau
 
 BASE_DIR = Path(__file__).resolve().parents[3]
 CONFIG_PATH = BASE_DIR / "config" / "mlp.yaml"
@@ -21,8 +22,9 @@ CONFIG_PATH = BASE_DIR / "config" / "mlp.yaml"
 RESULTS_COLUMNS = ["experiment", "dataset_variant", "split", "accuracy", "precision", "recall", "f1", "roc_auc",
                    "average_precision", "threshold", "scaling", "scaler", "feature_selection", "feature_selection_method",
                    "selected_k_features", "smote", "use_pos_weight", "pos_weight_mode", "pos_weight_value", "hidden_layers",
-                   "activation", "dropout", "learning_rate", "batch_size", "epochs", "weight_decay", "device", "early_stopping",
-                   "patience", "min_delta", "actual_epochs", "best_epoch", "best_val_loss", "tuning_stage_1", "tuning_stage_2"]
+                   "activation", "dropout", "learning_rate", "batch_size", "epochs", "scheduler_enabled", "scheduler_factor",
+                   "scheduler_patience", "scheduler_min_lr", "weight_decay", "device", "early_stopping", "patience",
+                   "min_delta", "actual_epochs", "best_epoch", "best_val_loss", "tuning_stage_1", "tuning_stage_2"]
 
 def load_config(config_path: Path) -> dict:
     with config_path.open("r", encoding="utf-8") as file:
@@ -224,6 +226,24 @@ def build_loss_function(y_train: pd.Series, config: dict, device, logger: loggin
 
     return nn.BCEWithLogitsLoss(pos_weight=pos_weight), loss_info
 
+def build_scheduler(optimizer, config: dict, logger: logging.Logger):
+    model_cfg = config["model"]
+
+    if not model_cfg["scheduler_enabled"]:
+        logger.info("Learning rate scheduler disabled")
+        return None
+
+    logger.info(f"Using ReduceLROnPlateau scheduler: factor={model_cfg['scheduler_factor']}, patience={model_cfg['scheduler_patience']}, "
+                f"min_lr={model_cfg['scheduler_min_lr']}")
+
+    scheduler = ReduceLROnPlateau(optimizer, mode="min", factor=model_cfg["scheduler_factor"],
+                                  patience=model_cfg["scheduler_patience"], min_lr=model_cfg["scheduler_min_lr"])
+
+    return scheduler
+
+def get_current_learning_rate(optimizer) -> float:
+    return optimizer.param_groups[0]["lr"]
+
 def train_model(model, train_loader, val_loader, y_train: pd.Series, config: dict, device, logger):
     model_cfg = config["model"]
 
@@ -233,6 +253,7 @@ def train_model(model, train_loader, val_loader, y_train: pd.Series, config: dic
         lr=model_cfg["learning_rate"],
         weight_decay=model_cfg["weight_decay"]
     )
+    scheduler = build_scheduler(optimizer, config, logger)
 
     epochs = model_cfg["epochs"]
     history = []
@@ -271,6 +292,14 @@ def train_model(model, train_loader, val_loader, y_train: pd.Series, config: dic
         train_loss = train_loss / len(train_loader.dataset)
         val_loss = calculate_loss(model, val_loader, criterion, device)
 
+        if scheduler is not None:
+            old_lr = get_current_learning_rate(optimizer)
+            scheduler.step(val_loss)
+            new_lr = get_current_learning_rate(optimizer)
+
+            if new_lr < old_lr:
+                logger.info(f"Learning rate reduced from {old_lr:.8f} to {new_lr:.8f}")
+
         if early_stopping_enabled:
             improved = early_stopping.update(val_loss, model, epoch)
             best_val_loss = early_stopping.best_loss
@@ -283,6 +312,8 @@ def train_model(model, train_loader, val_loader, y_train: pd.Series, config: dic
                 best_epoch = epoch
             epochs_without_improvement = None
 
+        current_lr = get_current_learning_rate(optimizer)
+
         history.append({
             "epoch": epoch,
             "train_loss": train_loss,
@@ -290,11 +321,12 @@ def train_model(model, train_loader, val_loader, y_train: pd.Series, config: dic
             "best_val_loss": best_val_loss,
             "best_epoch": best_epoch,
             "epochs_without_improvement": epochs_without_improvement,
-            "improved": improved
+            "improved": improved,
+            "learning_rate": current_lr
         })
 
         logger.info(f"Epoch {epoch}/{epochs} - train_loss={train_loss:.6f}, val_loss={val_loss:.6f}, best_val_loss={best_val_loss:.6f}, "
-                    f"best_epoch={best_epoch}, epochs_without_improvement={epochs_without_improvement}")
+                    f"best_epoch={best_epoch}, epochs_without_improvement={epochs_without_improvement}, learning_rate={current_lr:.8f}")
 
         if early_stopping_enabled and early_stopping.should_stop:
             logger.info(f"Early stopping triggered at epoch {epoch}. Best epoch: {early_stopping.best_epoch}, best_val_loss={early_stopping.best_loss:.6f}")
@@ -502,6 +534,10 @@ def build_results_summary_row(metrics: dict, config: dict, model_params: dict | 
         "epochs": model_params.get("epochs", model_cfg.get("epochs")),
         "weight_decay": model_params.get("weight_decay", model_cfg.get("weight_decay")),
         "device": model_params.get("device", model_cfg.get("device")),
+        "scheduler_enabled": model_params.get("scheduler_enabled", model_cfg["scheduler_enabled"]),
+        "scheduler_factor": model_params.get("scheduler_factor", model_cfg["scheduler_factor"]),
+        "scheduler_patience": model_params.get("scheduler_patience", model_cfg["scheduler_patience"]),
+        "scheduler_min_lr": model_params.get("scheduler_min_lr", model_cfg["scheduler_min_lr"]),
 
         "early_stopping": model_params.get("early_stopping", model_cfg.get("early_stopping")),
         "patience": model_params.get("patience", model_cfg.get("patience")),
@@ -587,10 +623,14 @@ def plot_precision_recall_curve(metrics: dict, config: dict, logger: logging.Log
 
     logger.info(f"Saved Precision-Recall curve plot to: {save_path}")
 
-def save_visualizations(metrics: dict, config: dict, logger: logging.Logger) -> None:
+def save_visualizations(metrics: dict, config: dict, logger: logging.Logger, history_df: pd.DataFrame | None = None) -> None:
     plot_confusion_matrix(metrics, config, logger)
     plot_roc_curve(metrics, config, logger)
     plot_precision_recall_curve(metrics, config, logger)
+
+    if history_df is not None:
+        plot_training_history(history_df, config, logger)
+        plot_learning_rate_curve(history_df, config, logger)
 
 def apply_threshold(y_proba: pd.Series | list, threshold: float) -> list:
     return [1 if prob >= threshold else 0 for prob in y_proba]
@@ -645,8 +685,32 @@ def save_training_history(history_df: pd.DataFrame, config: dict, logger) -> Non
     history_df.to_csv(save_path, index=False)
     logger.info(f"Saved training history to: {save_path}")
 
+def plot_learning_rate_curve(history_df: pd.DataFrame, config: dict, logger) -> None:
+    output_dir = BASE_DIR / config["output"]["output_dir"]
+    output_dir.mkdir(parents=True, exist_ok=True)
+    save_path = output_dir / "learning_rate_curve.jpg"
+
+    if "learning_rate" not in history_df.columns:
+        logger.warning("Skipping learning rate plot: 'learning_rate' column not found in training history")
+        return
+
+    fig, ax = plt.subplots(figsize=(7, 4.5))
+    ax.plot(history_df["epoch"], history_df["learning_rate"], marker="o", label="learning_rate")
+
+    ax.set_xlabel("Epoch")
+    ax.set_ylabel("Learning rate")
+    ax.set_title("MLP learning rate history")
+    ax.legend()
+    ax.grid(True, alpha=0.3)
+
+    plt.tight_layout()
+    plt.savefig(save_path, dpi=300, bbox_inches="tight")
+    plt.close(fig)
+
+    logger.info(f"Saved learning rate curve to: {save_path}")
+
 def evaluate_and_save_split(model, data_loader, split_name: str, threshold: float, device, config: dict, logger: logging.Logger,
-                            training_summary: dict | None = None) -> dict:
+                            training_summary: dict | None = None, history_df: pd.DataFrame | None = None) -> dict:
     metrics = evaluate_model(
         model=model,
         data_loader=data_loader,
@@ -671,7 +735,7 @@ def evaluate_and_save_split(model, data_loader, split_name: str, threshold: floa
         save_metrics(metrics, config, logger)
 
     if config["output"]["save_plots"]:
-        save_visualizations(metrics, config, logger)
+        save_visualizations(metrics, config, logger, history_df)
 
     if config["output"]["save_predictions"]:
         save_predictions(metrics, config, logger)
@@ -904,11 +968,8 @@ def main() -> None:
 
         threshold = config["model"].get("decision_threshold", 0.5)
 
-        evaluate_and_save_split(model=model, data_loader=val_loader, split_name="Validation", threshold=threshold,
-                                device=device, config=config, logger=logger, training_summary=training_summary)
-
-        if config["output"]["save_plots"]:
-            plot_training_history(history_df, config, logger)
+        evaluate_and_save_split(model=model, data_loader=val_loader, split_name="Validation", threshold=threshold, device=device,
+                                config=config, logger=logger, training_summary=training_summary, history_df=history_df)
 
     winsound.Beep(2500,1000)
 
