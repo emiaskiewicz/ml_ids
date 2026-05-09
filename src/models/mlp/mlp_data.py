@@ -68,16 +68,15 @@ def plot_correlation_matrix(corr_matrix: pd.DataFrame, output_dir: Path, filenam
 
     logger.info(f"Saved correlation heatmap to {path}")
 
-def remove_correlated_features(df: pd.DataFrame, threshold: float, logger):
-    corr_matrix = df.corr(numeric_only=True).abs()
-    upper = corr_matrix.where(np.triu(np.ones(corr_matrix.shape), k=1).astype(bool))
+def remove_correlated_features(corr_matrix: pd.DataFrame, threshold: float, logger) -> list[str]:
+    upper = corr_matrix.abs().where(np.triu(np.ones(corr_matrix.shape), k=1).astype(bool))
     to_drop = [col for col in upper.columns if any(upper[col] > threshold)]
 
     logger.info(f"Removing {len(to_drop)} correlated features")
-    logger.info(f"Removed features: {to_drop}")
-    df_reduced = df.drop(columns=to_drop)
+    if to_drop:
+        logger.info(f"Removed features: {to_drop}")
 
-    return df_reduced, to_drop
+    return to_drop
 
 def get_scaler(scaler_name: str, logger):
     scaler_name = scaler_name.lower()
@@ -207,11 +206,14 @@ def prepare_mlp_data(config: dict):
     plot_correlation_matrix(corr_matrix, output_cfg["output_dir"], "base_corr.jpg" ,logger)
     if features_cfg["remove_correlated_features"]:
         logger.info(f"Removing correlated features")
-        X_train, to_drop = remove_correlated_features(X_train, features_cfg["correlation_threshold"], logger)
-        X_val.drop(columns=to_drop, inplace=True)
-        X_test.drop(columns=to_drop, inplace=True)
-        corr_matrix = compute_correlation_matrix(X_train, logger)
-        plot_correlation_matrix(corr_matrix, output_cfg["output_dir"], "corr_after_remove.jpg", logger)
+        to_drop = remove_correlated_features(corr_matrix, features_cfg["correlation_threshold"], logger)
+        if to_drop:
+            X_train = X_train.drop(columns=to_drop)
+            X_val = X_val.drop(columns=to_drop)
+            X_test = X_test.drop(columns=to_drop)
+
+            corr_matrix_new = compute_correlation_matrix(X_train, logger)
+            plot_correlation_matrix(corr_matrix_new, output_cfg["output_dir"], "corr_after_remove.jpg", logger)
 
     if prep_cfg["scaling"]:
         logger.info("Scaling is enabled")
