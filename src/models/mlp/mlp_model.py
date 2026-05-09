@@ -293,7 +293,7 @@ def train_model(model, train_loader, val_loader, y_train: pd.Series, config: dic
             X_batch = X_batch.to(device)
             y_batch = y_batch.to(device)
 
-            optimizer.zero_grad()
+            optimizer.zero_grad(set_to_none=True)
             logits = model(X_batch)
             loss = criterion(logits, y_batch)
             loss.backward()
@@ -351,11 +351,11 @@ def train_model(model, train_loader, val_loader, y_train: pd.Series, config: dic
     logger.info("Model training completed")
     return model, pd.DataFrame(history), loss_info
 
-def predict_proba(model, data_loader, device) -> tuple[list[int], list[float]]:
+def predict_proba(model, data_loader, device) -> tuple[torch.Tensor, torch.Tensor]:
     model.eval()
 
-    y_true = []
-    y_proba = []
+    y_true_list = []
+    y_proba_list = []
 
     with torch.no_grad():
         for X_batch, y_batch in data_loader:
@@ -364,8 +364,11 @@ def predict_proba(model, data_loader, device) -> tuple[list[int], list[float]]:
             logits = model(X_batch)
             probabilities = torch.sigmoid(logits)
 
-            y_true.extend(y_batch.cpu().numpy().astype(int).tolist())
-            y_proba.extend(probabilities.cpu().numpy().tolist())
+            y_true_list.append(y_batch.cpu())
+            y_proba_list.append(probabilities.cpu())
+
+    y_true = torch.cat(y_batch.cpu().numpy().astype(int).tolist())
+    y_proba = torch.cat(probabilities.cpu().numpy().tolist())
 
     return y_true, y_proba
 
@@ -1041,7 +1044,7 @@ def train_final_model(model: nn.Module, train_loader: DataLoader, y_train_final:
         for X_batch, y_batch in train_loader:
             X_batch = X_batch.to(device)
             y_batch = y_batch.to(device)
-            optimizer.zero_grad()
+            optimizer.zero_grad(set_to_none=True)
             logits = model(X_batch)
             loss = criterion(logits, y_batch)
             loss.backward()
