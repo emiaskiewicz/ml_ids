@@ -22,9 +22,9 @@ def load_existing_split_data(config: dict, logger) -> tuple[pd.DataFrame, pd.Dat
     train_path, val_path, test_path = get_split_paths(config)
 
     logger.info("Loading existing split data")
-    train_df = pd.read_csv(train_path, memory_map=True, low_memory=False)
-    val_df = pd.read_csv(val_path, memory_map=True, low_memory=False)
-    test_df = pd.read_csv(test_path, memory_map=True, low_memory=False)
+    train_df = pd.read_csv(train_path, engine="pyarrow")
+    val_df = pd.read_csv(val_path, engine="pyarrow")
+    test_df = pd.read_csv(test_path, engine="pyarrow")
 
     logger.info(f"Loaded train split shape: {train_df.shape}")
     logger.info(f"Loaded validation split shape: {val_df.shape}")
