@@ -18,6 +18,7 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau
 import copy
 from itertools import product
 import numpy as np
+import os
 
 BASE_DIR = Path(__file__).resolve().parents[3]
 CONFIG_PATH = BASE_DIR / "config" / "mlp.yaml"
@@ -151,9 +152,13 @@ def build_model(input_dim: int, config: dict, overrides: dict, logger) -> MLPNet
 def create_dataloader(X, y, batch_size: int, shuffle: bool) -> DataLoader:
     X_tensor = torch.tensor(X.to_numpy(), dtype=torch.float32)
     y_tensor = torch.tensor(y.to_numpy(), dtype=torch.float32)
-
     dataset = TensorDataset(X_tensor, y_tensor)
-    return DataLoader(dataset, batch_size=batch_size, shuffle=shuffle)
+
+    use_cuda = torch.cuda.is_available()
+    workers = min(4, os.cpu_count() or 1)
+
+    return DataLoader(dataset, batch_size=batch_size, shuffle=shuffle, num_workers=workers, pin_memory=use_cuda,
+                      persistent_workers=True if workers > 0 else False)
 
 def calculate_loss(model, data_loader, criterion, device) -> float:
     model.eval()
