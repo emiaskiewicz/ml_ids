@@ -1,6 +1,6 @@
 import logging
 import csv
-import winsound
+#import winsound
 from pathlib import Path
 import yaml
 from mlp_data import prepare_mlp_data, get_logger
@@ -351,24 +351,25 @@ def train_model(model, train_loader, val_loader, y_train: pd.Series, config: dic
     logger.info("Model training completed")
     return model, pd.DataFrame(history), loss_info
 
-def predict_proba(model, data_loader, device) -> tuple[torch.Tensor, torch.Tensor]:
+def predict_proba(model, data_loader, device) -> tuple[list[int], list[float]]:
     model.eval()
-
     y_true_list = []
     y_proba_list = []
 
     with torch.no_grad():
         for X_batch, y_batch in data_loader:
             X_batch = X_batch.to(device)
-
             logits = model(X_batch)
             probabilities = torch.sigmoid(logits)
 
-            y_true_list.append(y_batch.cpu())
-            y_proba_list.append(probabilities.cpu())
+            y_true_list.append(y_batch.detach().cpu())
+            y_proba_list.append(probabilities.detach().cpu())
 
-    y_true = torch.cat(y_batch.cpu().numpy().astype(int).tolist())
-    y_proba = torch.cat(probabilities.cpu().numpy().tolist())
+    y_true_tensor = torch.cat(y_true_list)
+    y_proba_tensor = torch.cat(y_proba_list)
+
+    y_true = y_true_tensor.to(torch.int32).tolist()
+    y_proba = y_proba_tensor.squeeze().tolist()
 
     return y_true, y_proba
 
@@ -551,8 +552,8 @@ def plot_confusion_matrix(metrics: dict, config: dict, logger: logging.Logger) -
 
     fig, ax = plt.subplots(figsize=(6, 5))
     ConfusionMatrixDisplay.from_predictions(
-        y_true=metrics["y_true"],
-        y_pred=metrics["y_pred"],
+        metrics["y_true"],
+        metrics["y_pred"],
         display_labels=["BENIGN", "ATTACK"],
         cmap="Blues",
         values_format="d",
@@ -575,12 +576,11 @@ def plot_roc_curve(metrics: dict, config: dict, logger: logging.Logger) -> None:
     save_path.parent.mkdir(parents=True, exist_ok=True)
 
     fig, ax = plt.subplots(figsize=(6, 5))
-    RocCurveDisplay.from_predictions(
-        y_true=metrics["y_true"],
-        y_score=metrics["y_proba"],
-        ax=ax,
-        name=f"{config['experiment']['name']} ({metrics['split_name']})"
-    )
+    y_true = metrics["y_true"]
+    y_proba = metrics["y_proba"]
+
+    RocCurveDisplay.from_predictions(y_true, y_proba, name=f"MLP (AUC = {metrics['roc_auc']:.4f})", ax=ax,
+                                     color='darkorange', linewidth=2)
     ax.set_title(f"{metrics['split_name']} - ROC Curve")
     ax.grid(True, alpha=0.3)
     #ax.set_xlim(0.0, 0.02)
@@ -601,12 +601,11 @@ def plot_precision_recall_curve(metrics: dict, config: dict, logger: logging.Log
     save_path.parent.mkdir(parents=True, exist_ok=True)
 
     fig, ax = plt.subplots(figsize=(6, 5))
-    PrecisionRecallDisplay.from_predictions(
-        y_true=metrics["y_true"],
-        y_score=metrics["y_proba"],
-        ax=ax,
-        name=f"{config['experiment']['name']} ({metrics['split_name']})"
-    )
+    y_true = metrics["y_true"]
+    y_proba = metrics["y_proba"]
+
+    PrecisionRecallDisplay.from_predictions(y_true, y_proba, name=f"MLP (AP = {metrics['average_precision']:.4f})", ax=ax,
+                                            color='purple', linewidth=2)
     ax.set_title(f"{metrics['split_name']} - Precision-Recall Curve")
     #ax.set_xlim(0.98, 1.0)
     #ax.set_ylim(0.98, 1.0)
@@ -894,7 +893,7 @@ def tune_decision_threshold(y_true: list[int], y_proba: list[float], metric_name
     while threshold <= stop + 1e-9:
         threshold = round(threshold, 6)
 
-        y_pred = y_pred = (np.array(y_proba) >= threshold).astype(int).tolist()
+        y_pred = (np.array(y_proba) >= threshold).astype(int).tolist()
         metrics = calculate_binary_metrics(y_true, y_pred, y_proba)
         selected_metric_value = metrics[metric_name]
 
@@ -1147,7 +1146,7 @@ def main() -> None:
         evaluate_and_save_split(model=model, data_loader=val_loader, split_name="Validation", threshold=threshold, device=device,
                                 config=config, logger=logger, training_summary=training_summary, history_df=history_df)
 
-    winsound.Beep(2500,1000)
+    #winsound.Beep(2500,1000)
 
 if __name__ == "__main__":
     main()
