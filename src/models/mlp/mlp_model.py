@@ -203,7 +203,7 @@ def build_loss_function(y_train: pd.Series, config: dict, device, logger: loggin
 
     loss_info = {
         "use_pos_weight": model_cfg["use_pos_weight"],
-        "pos_weight_mode": model_cfg["pos_weight_mode"],
+        "pos_weight_mode": model_cfg.get("pos_weight_mode", "auto"),
         "pos_weight_value": None
     }
 
@@ -214,7 +214,7 @@ def build_loss_function(y_train: pd.Series, config: dict, device, logger: loggin
     if config["preprocessing"]["smote"]:
         logger.warning("SMOTE and pos_weight are both enabled.")
 
-    pos_weight_mode = model_cfg["pos_weight_mode"]
+    pos_weight_mode = model_cfg.get("pos_weight_mode", "auto")
 
     if pos_weight_mode == "auto":
         pos_weight, pos_weight_value = calculate_pos_weight(y_train, device, logger)
@@ -518,7 +518,7 @@ def build_results_summary_row(metrics: dict, config: dict, model_params: dict | 
         "selected_k_features": features_cfg.get("selected_k_features", None),
         "smote": prep_cfg.get("smote", False),
         "use_pos_weight": model_params["use_pos_weight"],
-        "pos_weight_mode": model_params["pos_weight_mode"],
+        "pos_weight_mode": model_params.get("pos_weight_mode", "auto"),
         "pos_weight_value": training_summary["pos_weight_value"],
 
         "hidden_layers": model_params.get("hidden_layers", model_cfg.get("hidden_layers")),
