@@ -5,6 +5,7 @@ from utils.logger import setup_logger
 import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.preprocessing import StandardScaler, MinMaxScaler, RobustScaler
+from sklearn.feature_selection import SelectKBest, f_classif, VarianceThreshold
 
 BASE_DIR = Path(__file__).resolve().parents[3]
 
@@ -145,6 +146,52 @@ def filter_normal_training_data(X_train: pd.DataFrame, y_train: pd.Series, norma
 
     return X_train_normal, y_train_normal
 
+def build_selected_dataframe(selected_array, selected_columns: list[str], original_index, dataset_name: str, logger) -> pd.DataFrame:
+    selected_df = pd.DataFrame(selected_array, columns=selected_columns, index=original_index)
+    logger.info(f"{dataset_name} shape after feature selection: {selected_df.shape}")
+
+    return selected_df
+
+def apply_feature_selection(X_train: pd.DataFrame, X_train_normal: pd.DataFrame, X_val: pd.DataFrame, X_test: pd.DataFrame,
+                            y_train: pd.Series, method: str, k_features: int | None, variance_threshold: float,
+                            logger) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    method = method.lower()
+
+    if method == "select_k_best":
+        if k_features is None or k_features <= 0 or k_features > X_train.shape[1]:
+            logger.critical(f"selected_k_features is wrong, SelectKBest is enabled")
+            exit(1)
+        logger.info(f"Applying supervised SelectKBest with k={k_features}")
+        selector = SelectKBest(score_func=f_classif, k=k_features)
+        selector.fit(X_train, y_train)
+    elif method == "variance_threshold":
+        logger.info(f"Applying unsupervised VarianceThreshold with threshold={variance_threshold}")
+        selector = VarianceThreshold(threshold=variance_threshold)
+        selector.fit(X_train_normal)
+    else:
+        logger.critical(f"Unsupported feature selection method: {method}")
+        exit(1)
+
+    selected_columns = X_train_normal.columns[selector.get_support()].tolist()
+
+    if not selected_columns:
+        logger.critical("Feature selection removed all features")
+        exit(1)
+
+    logger.info(f"Selected {len(selected_columns)} features")
+    logger.info(f"Selected features: {selected_columns}")
+
+    X_train_normal_selected = selector.transform(X_train_normal)
+    X_val_selected = selector.transform(X_val)
+    X_test_selected = selector.transform(X_test)
+
+    X_train_normal_selected = build_selected_dataframe(X_train_normal_selected, selected_columns, X_train_normal.index,
+                                                       "X_train_normal", logger)
+    X_val_selected = build_selected_dataframe(X_val_selected, selected_columns, X_val.index, "X_val", logger)
+    X_test_selected = build_selected_dataframe(X_test_selected, selected_columns, X_test.index, "X_test", logger)
+
+    return X_train_normal_selected, X_val_selected, X_test_selected
+
 def prepare_ae_data(config: dict):
     logger = get_logger(config)
     logger.info(f"Preparing data for experiment: {config['experiment']['name']}")
@@ -175,6 +222,7 @@ def prepare_ae_data(config: dict):
         logger.info(f"Removing correlated features")
         to_drop = remove_correlated_features(corr_matrix, features_cfg["correlation_threshold"], logger)
         if to_drop:
+            X_train = X_train.drop(columns=to_drop)
             X_train_normal = X_train_normal.drop(columns=to_drop)
             X_val = X_val.drop(columns=to_drop)
             X_test = X_test.drop(columns=to_drop)
@@ -183,6 +231,15 @@ def prepare_ae_data(config: dict):
             plot_correlation_matrix(corr_matrix_new, output_cfg["output_dir"], "corr_after_remove.jpg", logger)
     else:
         logger.info("Removing correlated features is disabled")
+
+    if features_cfg["use_feature_selection"]:
+        logger.info("Feature selection is enabled")
+
+        X_train_normal, X_val, X_test = apply_feature_selection(X_train=X_train, X_train_normal=X_train_normal, X_val=X_val,
+                    X_test=X_test, y_train=y_train, method=features_cfg["feature_selection_method"], k_features=features_cfg["selected_k_features"],
+                    variance_threshold=features_cfg["variance_threshold"], logger=logger)
+    else:
+        logger.info("Feature selection is disabled")
 
     if features_cfg["scaling"]:
         logger.info("Scaling is enabled")

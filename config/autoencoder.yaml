@@ -19,6 +19,10 @@ split:
 features:
   remove_correlated_features: false
   correlation_threshold: 0.95
+  use_feature_selection: false
+  feature_selection_method: "select_k_best"
+  selected_k_features: 40
+  variance_threshold: 0.0
   scaling: true
   scaler: "standard"
 
