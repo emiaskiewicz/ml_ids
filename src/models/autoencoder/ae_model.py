@@ -561,8 +561,8 @@ def plot_confusion_matrix(metrics: dict, config: dict, logger: logging.Logger) -
     logger.info(f"Saved confusion matrix plot to: {save_path}")
 
 def plot_roc_curve(metrics: dict, config: dict, logger: logging.Logger) -> None:
-    if metrics["anomaly_scores"] is None:
-        logger.warning("Skipping ROC curve: anomaly_scores not available")
+    if metrics["anomaly_scores"] is None or metrics["roc_auc"] is None:
+        logger.warning("Skipping ROC curve.")
         return
 
     split_name = metrics["split_name"].lower()
@@ -586,8 +586,8 @@ def plot_roc_curve(metrics: dict, config: dict, logger: logging.Logger) -> None:
     logger.info(f"Saved ROC curve plot to: {save_path}")
 
 def plot_precision_recall_curve(metrics: dict, config: dict, logger: logging.Logger) -> None:
-    if metrics["anomaly_scores"] is None:
-        logger.warning("Skipping Precision-Recall curve: anomaly_scores not available")
+    if metrics["anomaly_scores"] is None or metrics["average_precision"] is None:
+        logger.warning("Skipping Precision-Recall curve.")
         return
 
     split_name = metrics["split_name"].lower()
@@ -848,7 +848,7 @@ def run_single_ae_experiment(params: dict, X_train_normal, X_val_normal, X_val, 
 
     return result_row, model, history_df, training_summary, best_threshold
 
-def tuning_stage_1(X_train_normal, X_val_normal, X_val, y_val, config: dict, device, logger: logging.Logger) -> (tuple)[dict, nn.Module, pd.DataFrame, pd.DataFrame, dict, float]:
+def tuning_stage_1(X_train_normal, X_val_normal, X_val, y_val, config: dict, device, logger: logging.Logger) -> tuple[dict, nn.Module, pd.DataFrame, pd.DataFrame, dict, float]:
     logger.info("Starting Autoencoder tuning stage 1")
 
     metric_name = config["tuning_stage_1"]["metric"].lower()
