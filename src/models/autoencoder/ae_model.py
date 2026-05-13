@@ -1086,6 +1086,36 @@ def save_predictions(metrics: dict, config: dict, logger: logging.Logger) -> Non
 
     logger.info(f"Saved {metrics['split_name']} predictions to: {save_path}")
 
+def save_model(model: nn.Module, config: dict, logger: logging.Logger, model_params: dict | None = None, threshold: float | None = None,
+               training_summary: dict | None = None) -> None:
+    output_dir = BASE_DIR / config["output"]["output_dir"]
+    output_dir.mkdir(parents=True, exist_ok=True)
+    save_path = output_dir / "model.pt"
+    model_config = config["model"].copy()
+
+    if model_params is not None:
+        model_config.update(model_params)
+
+    first_encoder_layer = model.encoder[0]
+    input_dim = first_encoder_layer.in_features if isinstance(first_encoder_layer, nn.Linear) else None
+
+    checkpoint = {
+        "experiment": config["experiment"]["name"],
+        "dataset_variant": config["data"]["dataset_variant"],
+        "model_type": "autoencoder",
+        "model_class": model.__class__.__name__,
+        "input_dim": input_dim,
+        "model_config": model_config,
+        "reconstruction_threshold": threshold,
+        "training_summary": training_summary,
+        "state_dict": model.state_dict(),
+        "full_config": config
+    }
+
+    torch.save(checkpoint, save_path)
+
+    logger.info(f"Saved autoencoder model checkpoint to: {save_path}")
+
 def main() -> None:
     config = load_config(CONFIG_PATH)
     logger = get_logger(config)
@@ -1152,6 +1182,10 @@ def main() -> None:
                 save_stage_results(results_df=stage_2_results_df, best_params=best_stage_2_params,
                     output_dir=config["output"]["output_dir"], stage="2", logger=logger)
 
+        if config["output"]["save_model"]:
+            save_model(model=best_model, config=best_config, logger=logger, model_params=best_stage_1_params,
+                       threshold=final_threshold, training_summary=best_training_summary)
+
         evaluate_and_save_split(model=best_model, data_loader=val_labeled_loader, split_name="Validation",
             threshold=final_threshold, device=device, config=best_config, logger=logger,
             training_summary=best_training_summary, history_df=best_history_df, model_params=best_stage_1_params)
@@ -1179,6 +1213,10 @@ def main() -> None:
 
         threshold = config["model"]["reconstruction_threshold"]
         logger.info(f"Threshold tuning disabled. Using reconstruction_threshold={threshold:.6f}")
+
+        if config["output"]["save_model"]:
+            save_model(model=model, config=config, logger=logger, threshold=threshold,
+                training_summary=training_summary)
 
         evaluate_and_save_split(model=model, data_loader=val_labeled_loader, split_name="Validation",
             threshold=threshold, device=device, config=config, logger=logger, training_summary=training_summary,
