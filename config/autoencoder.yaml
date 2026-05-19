@@ -51,6 +51,8 @@ model:
   patience: 10
   min_delta: 0.0001
   device: "auto"
+  denoising: false
+  noise_std: 0.05
 
 tuning_stage_1:
   enabled: false
@@ -70,6 +72,8 @@ tuning_stage_1:
     scheduler_enabled: [false, true]
     scheduler_patience: [5, 10]
     scheduler_factor: [0.5]
+    denoising: [false, true]
+    noise_std: [0.01, 0.05, 0.1]
 
 tuning_stage_2:
   enabled: false

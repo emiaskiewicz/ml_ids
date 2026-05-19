@@ -27,8 +27,9 @@ RESULTS_COLUMNS = ["experiment", "dataset_variant", "split", "accuracy", "precis
     "average_precision", "reconstruction_threshold", "scaling", "scaler", "feature_selection", "feature_selection_method",
     "selected_k_features", "remove_correlated_features", "correlation_threshold", "encoder_layers", "latent_dim", "activation",
     "output_activation", "batch_norm", "dropout", "loss_function", "learning_rate", "batch_size", "epochs", "scheduler_enabled",
-    "scheduler_factor", "scheduler_patience", "scheduler_min_lr", "weight_decay", "device", "early_stopping", "patience",
-    "min_delta", "actual_epochs", "best_epoch", "best_val_loss", "threshold_metric", "threshold_candidates", "tuning_stage_1", "tuning_stage_2"]
+    "scheduler_factor", "scheduler_patience", "scheduler_min_lr", "denoising", "noise_std", "weight_decay", "device", 
+    "early_stopping", "patience", "min_delta", "actual_epochs", "best_epoch", "best_val_loss", "threshold_metric", 
+    "threshold_candidates", "tuning_stage_1", "tuning_stage_2"]
 
 def load_config(config_path: Path) -> dict:
     with config_path.open("r", encoding="utf-8") as file:
@@ -237,6 +238,12 @@ def build_scheduler(optimizer, config: dict, logger: logging.Logger):
 def get_current_learning_rate(optimizer) -> float:
     return optimizer.param_groups[0]["lr"]
 
+def add_denoising_noise(X_batch: torch.Tensor, noise_std: float) -> torch.Tensor:
+    if noise_std <= 0:
+        return X_batch
+    noise = torch.randn_like(X_batch) * noise_std
+    return X_batch + noise
+
 def train_model(model, train_loader, val_loader, config: dict, device, logger):
     model_cfg = config["model"]
 
@@ -269,7 +276,11 @@ def train_model(model, train_loader, val_loader, config: dict, device, logger):
             X_batch = X_batch.to(device)
 
             optimizer.zero_grad(set_to_none=True)
-            reconstructed = model(X_batch)
+            if model_cfg["denoising"]:
+                model_input = add_denoising_noise(X_batch, model_cfg["noise_std"])
+            else:
+                model_input = X_batch
+            reconstructed = model(model_input)
             loss = criterion(reconstructed, X_batch)
             loss.backward()
             optimizer.step()
@@ -523,6 +534,8 @@ def build_results_summary_row(metrics: dict, config: dict, model_params: dict | 
         "scheduler_factor": model_cfg["scheduler_factor"],
         "scheduler_patience": model_cfg["scheduler_patience"],
         "scheduler_min_lr": model_cfg["scheduler_min_lr"],
+        "denoising": model_cfg["denoising"],
+        "noise_std": model_cfg["noise_std"],
         "weight_decay": model_cfg["weight_decay"],
         "device": model_cfg["device"],
         "early_stopping": model_cfg["early_stopping"],
