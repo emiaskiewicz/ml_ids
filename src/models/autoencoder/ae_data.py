@@ -67,6 +67,50 @@ def plot_correlation_matrix(corr_matrix: pd.DataFrame, output_dir: Path, filenam
 
     logger.info(f"Saved correlation heatmap to {path}")
 
+def get_log_transform_columns(X_train_normal: pd.DataFrame, feat_cfg, logger) -> list[str]:
+    if feat_cfg == "auto":
+        excluded_prefixes = ("FIN_", "SYN_", "RST_", "PSH_", "ACK_", "URG_", "CWE_", "ECE_")
+        excluded_columns = {"Protocol", "Source_Port", "Destination_Port"}
+        selected_columns = []
+
+        for column in X_train_normal.columns:
+            if column in excluded_columns or column.endswith("_Flag_Count") or column.startswith(excluded_prefixes):
+                continue
+            series = X_train_normal[column]
+            if not pd.api.types.is_numeric_dtype(series) or (series < 0).any() or series.nunique(dropna=False) <= 2:
+                continue
+            skewness = series.skew()
+            if pd.notna(skewness) and abs(skewness) >= 1.0:
+                selected_columns.append(column)
+
+        logger.info(f"Auto-selected {len(selected_columns)} columns for log1p transform")
+        logger.info(f"Log1p columns: {selected_columns}")
+        return selected_columns
+
+    if isinstance(feat_cfg, list):
+        return feat_cfg
+
+    logger.critical("log_transform_columns must be a list or 'auto'")
+    exit(1)
+
+def apply_log1p_transform(X_train: pd.DataFrame, X_train_normal: pd.DataFrame, X_val: pd.DataFrame, X_test: pd.DataFrame, feat_cfg, 
+                          logger) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    log_columns = get_log_transform_columns(X_train_normal, feat_cfg, logger)
+
+    for column in log_columns:
+        for dataset_name, X in [("X_train", X_train), ("X_train_normal", X_train_normal), ("X_val", X_val), ("X_test", X_test)]:
+            if column not in X.columns:
+                logger.critical(f"Column {column} not found in {dataset_name}")
+                exit(1)
+            if (X[column] < 0).any():
+                logger.critical(f"Column {column} in {dataset_name} contains negative values. Cannot apply log1p.")
+                exit(1)
+
+            X[column] = np.log1p(X[column])
+
+    logger.info(f"Applied log1p transform to {len(log_columns)} columns")
+    return X_train, X_train_normal, X_val, X_test
+
 def remove_correlated_features(corr_matrix: pd.DataFrame, threshold: float, logger) -> list[str]:
     upper = corr_matrix.abs().where(np.triu(np.ones(corr_matrix.shape), k=1).astype(bool))
     to_drop = [col for col in upper.columns if any(upper[col] > threshold)]
@@ -214,6 +258,12 @@ def prepare_ae_data(config: dict):
 
     logger.info(f"Validation class distribution:\n{y_val.value_counts().sort_index()}")
     logger.info(f"Test class distribution:\n{y_test.value_counts().sort_index()}")
+
+    if features_cfg["log_transform"]:
+        logger.info("Log1p transform is enabled")
+        X_train, X_train_normal, X_val, X_test = apply_log1p_transform(X_train, X_train_normal, X_val, X_test, features_cfg["log_transform_columns"], logger)
+    else:
+        logger.info("Log1p transform is disabled")
 
     corr_matrix=compute_correlation_matrix(X_train_normal, logger)
     plot_correlation_matrix(corr_matrix, output_cfg["output_dir"], "base_corr.jpg" ,logger)

@@ -17,6 +17,8 @@ split:
   split_dir: "data/split/easy/"
 
 features:
+  log_transform: false
+  log_transform_columns: "auto"
   remove_correlated_features: false
   correlation_threshold: 0.95
   use_feature_selection: false
