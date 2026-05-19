@@ -17,6 +17,8 @@ split:
   split_dir: "data/split/easy/"
 
 features:
+  use_network_features: false
+  drop_original_port_columns: false
   log_transform: false
   log_transform_columns: "auto"
   remove_correlated_features: false
