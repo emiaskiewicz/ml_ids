@@ -485,7 +485,6 @@ def build_results_summary_row(metrics: dict, config: dict, model_params: dict | 
     model_cfg.update(model_params)
 
     features_cfg = config["features"]
-    prep_cfg = config["preprocessing"]
     stage_1_cfg = config["tuning_stage_1"]
     stage_2_cfg = config["tuning_stage_2"]
 
@@ -501,8 +500,8 @@ def build_results_summary_row(metrics: dict, config: dict, model_params: dict | 
         "average_precision": metrics["average_precision"],
         "reconstruction_threshold": metrics["threshold_used"],
 
-        "scaling": prep_cfg.get("scaling", False),
-        "scaler": prep_cfg.get("scaler", None),
+        "scaling": features_cfg.get("scaling", False),
+        "scaler": features_cfg.get("scaler", None),
         "feature_selection": features_cfg["use_feature_selection"],
         "feature_selection_method": features_cfg["feature_selection_method"],
         "selected_k_features": features_cfg["selected_k_features"],
