@@ -1,10 +1,10 @@
 experiment:
-  name: "LR-015e-tune"
+  name: "LR-015h-tune"
   random_state: 23
 
 data:
   input_dir: "data/cleaned"
-  dataset_variant: "easy"
+  dataset_variant: "hard"
   target_column: "Target"
   label_column: "Label"
 
@@ -14,7 +14,7 @@ split:
   stratify: true
   load_existing_split: true
   save_split: false
-  split_dir: "data/split/easy/"
+  split_dir: "data/split/hard/"
 
 features:
   drop_columns:
@@ -51,7 +51,7 @@ tuning_stage_2:
   threshold_values: [ 0.35, 0.40, 0.45, 0.50, 0.55, 0.60, 0.65 ]
 
 output:
-  output_dir: "outputs/logistic_regression/easy/LR-015-tune"
+  output_dir: "outputs/logistic_regression/hard/LR-015-tune"
   save_metrics: true
   save_plots: true
   save_predictions: false
@@ -60,5 +60,5 @@ output:
   save_best_config: true
 
 logging:
-  log_path: "logs/logistic_regression/easy/LR-015-tune.log"
+  log_path: "logs/logistic_regression/hard/LR-015-tune.log"
   log_level: "INFO"
