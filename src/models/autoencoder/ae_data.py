@@ -149,19 +149,32 @@ def get_log_transform_columns(X_train_normal: pd.DataFrame, feat_cfg, logger) ->
 def apply_log1p_transform(X_train: pd.DataFrame, X_train_normal: pd.DataFrame, X_val: pd.DataFrame, X_test: pd.DataFrame, feat_cfg, 
                           logger) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     log_columns = get_log_transform_columns(X_train_normal, feat_cfg, logger)
+    valid_log_columns = []
+    skipped_log_columns = []
+    datasets = [("X_train", X_train), ("X_train_normal", X_train_normal), ("X_val", X_val), ("X_test", X_test)]
 
     for column in log_columns:
-        for dataset_name, X in [("X_train", X_train), ("X_train_normal", X_train_normal), ("X_val", X_val), ("X_test", X_test)]:
+        negative_in = []
+        for dataset_name, X in datasets:
             if column not in X.columns:
                 logger.critical(f"Column {column} not found in {dataset_name}")
                 exit(1)
             if (X[column] < 0).any():
-                logger.critical(f"Column {column} in {dataset_name} contains negative values. Cannot apply log1p.")
-                exit(1)
+                negative_in.append(dataset_name)
+        if negative_in:
+            skipped_log_columns.append((column, negative_in))
+        else:
+            valid_log_columns.append(column)
 
-            X[column] = np.log1p(X[column])
+        for column, negative_in in skipped_log_columns:
+            logger.warning(f"Skipping log1p for column {column}; negative values found in: {negative_in}")
+
+        for column in valid_log_columns:
+            for dataset, X in datasets:
+                X[column] = np.log1p(X[column])
 
     logger.info(f"Applied log1p transform to {len(log_columns)} columns")
+    logger.info(f"Skipped {len(skipped_log_columns)} log1p columns due to negative values")
     return X_train, X_train_normal, X_val, X_test
 
 def remove_correlated_features(corr_matrix: pd.DataFrame, threshold: float, logger) -> list[str]:
