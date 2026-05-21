@@ -1,10 +1,10 @@
 experiment:
-  name: "DT"
+  name: "DT-01h-tune"
   random_state: 23
 
 data:
   input_dir: "data/cleaned"
-  dataset_variant: "easy"
+  dataset_variant: "hard"
   target_column: "Target"
   label_column: "Label"
 
@@ -13,7 +13,7 @@ split:
   val_size: 0.1
   stratify: true
   load_existing_split: true
-  split_dir: "data/split/easy/"
+  split_dir: "data/split/hard/"
 
 features:
   drop_columns:
@@ -21,37 +21,39 @@ features:
   remove_correlated_features: false
   correlation_threshold: 0.95
   use_feature_selection: false
-  feature_selection_method: null
+  feature_selection_method: "select_k_best" #"rfe"
   selected_k_features: 40
   smote: false
 
 model:
   criterion: gini
   max_depth: 10
-  min_samples_split: 20
-  min_samples_leaf: 10
+  min_samples_split: 2
+  min_samples_leaf: 1
   max_features: null
-  class_weight: null
+  class_weight: null #"balanced"
   ccp_alpha: 0.0
+  decision_threshold: 0.5
 
 tuning_stage_1:
-  enabled: false
+  enabled: true
   metric: f1
   criterion_values: ["gini", "entropy"]
-  max_depth_values: [5, 10, 15, null]
-  min_samples_split_values: [2, 10, 20]
-  min_samples_leaf_values: [1, 5, 10]
+  max_depth_values: [10, 12, 15, 18]
+  min_samples_split_values: [2, 10, 50]
+  min_samples_leaf_values: [1, 5, 20]
   max_features_values: [null]
   class_weight_values: [null, "balanced"]
-  ccp_alpha_values: [0.0, 0.001]
+  ccp_alpha_values: [0.0, 0.0001]
 
 tuning_stage_2:
-  enabled: false
+  enabled: true
   metric: f1
   threshold_values: [0.3, 0.4, 0.5, 0.6, 0.7]
 
 output:
-  output_dir: "outputs/decision_tree/easy/DT"
+  output_dir: "outputs/decision_tree/hard/DT-01h-tune"
+  summary_path: "outputs/decision_tree/hard/dt_h_results_sum.csv"
   save_metrics: true
   save_plots: true
   save_predictions: false
@@ -60,5 +62,5 @@ output:
   save_best_config: true
 
 logging:
-  log_path: "logs/decision_tree/easy/DT.log"
+  log_path: "logs/decision_tree/hard/DT-01h-tune.log"
   log_level: "INFO"
