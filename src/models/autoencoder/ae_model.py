@@ -24,12 +24,13 @@ BASE_DIR = Path(__file__).resolve().parents[3]
 CONFIG_PATH = BASE_DIR / "config" / "autoencoder.yaml"
 
 RESULTS_COLUMNS = ["experiment", "dataset_variant", "split", "accuracy", "precision", "recall", "f1", "roc_auc",
-    "average_precision", "reconstruction_threshold", "scaling", "scaler", "feature_selection", "feature_selection_method",
-    "selected_k_features", "remove_correlated_features", "correlation_threshold", "encoder_layers", "latent_dim", "activation",
-    "output_activation", "batch_norm", "dropout", "loss_function", "learning_rate", "batch_size", "epochs", "scheduler_enabled",
-    "scheduler_factor", "scheduler_patience", "scheduler_min_lr", "denoising", "noise_std", "weight_decay", "device", 
-    "early_stopping", "patience", "min_delta", "actual_epochs", "best_epoch", "best_val_loss", "threshold_metric", 
-    "threshold_candidates", "tuning_stage_1", "tuning_stage_2"]
+    "average_precision", "reconstruction_threshold", "use_network_features", "drop_original_port_columns", "log_transform",
+    "log_transform_columns", "scaling", "scaler", "feature_selection", "feature_selection_method", "selected_k_features",
+    "remove_correlated_features", "correlation_threshold", "encoder_layers", "latent_dim", "activation", "output_activation", 
+    "batch_norm", "dropout", "loss_function", "learning_rate", "batch_size", "epochs", "scheduler_enabled", "scheduler_factor", 
+    "scheduler_patience", "scheduler_min_lr", "denoising", "noise_std", "weight_decay", "device",  "early_stopping", "patience", 
+    "min_delta", "actual_epochs", "best_epoch", "best_val_loss", "threshold_metric", "threshold_candidates", 
+    "tuning_stage_1", "tuning_stage_2"]
 
 def load_config(config_path: Path) -> dict:
     with config_path.open("r", encoding="utf-8") as file:
@@ -511,6 +512,10 @@ def build_results_summary_row(metrics: dict, config: dict, model_params: dict | 
         "average_precision": metrics["average_precision"],
         "reconstruction_threshold": metrics["threshold_used"],
 
+        "use_network_features": features_cfg.get("use_network_features", False),
+        "drop_original_port_columns": features_cfg.get("drop_original_port_columns", False),
+        "log_transform": features_cfg.get("log_transform", False),
+        "log_transform_columns": features_cfg.get("log_transform_columns", None),
         "scaling": features_cfg.get("scaling", False),
         "scaler": features_cfg.get("scaler", None),
         "feature_selection": features_cfg["use_feature_selection"],
