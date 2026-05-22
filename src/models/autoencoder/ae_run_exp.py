@@ -68,9 +68,9 @@ def apply_experiment_settings(config: dict, exp: dict) -> dict:
 def experiment_finished(config: dict) -> bool:
     output_dir = PROJECT_DIR / config["output"]["output_dir"]
     if EVALUATE_TEST:
-        return (output_dir / "validation_metrics.json").exists()
-    else:
         return (output_dir / "test_metrics.json").exists()
+    else:
+        return (output_dir / "validation_metrics.json").exists()
 
 def run_experiment(exp_id: str) -> int:
     LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
