@@ -23,7 +23,7 @@ BASE_DIR = Path(__file__).resolve().parents[3]
 CONFIG_PATH = BASE_DIR / "config" / "cnn.yaml"
 
 RESULTS_COLUMNS = ["experiment", "dataset_variant", "split", "accuracy", "precision", "recall", "f1", "roc_auc",
-                   "average_precision", "threshold", "scaling", "scaler", "feature_selection", "feature_selection_method",
+                   "average_precision", "threshold", "scaling", "scaler","use_network_features", "drop_original_port_columns", "feature_selection", "feature_selection_method",
                    "selected_k_features", "smote", "use_pos_weight", "pos_weight_mode", "pos_weight_value", "conv_channels", "kernel_size", "fc_layers",
                    "activation", "batch_norm", "dropout", "learning_rate", "batch_size", "epochs","gradient_clip_norm", "global_pooling",
                    "input_dropout", "input_noise_std", "scheduler_enabled", "scheduler_factor", "scheduler_patience", "scheduler_min_lr", "weight_decay", "device", 
@@ -556,7 +556,8 @@ def build_results_summary_row(metrics: dict, config: dict, model_params: dict | 
 
         "scaling": prep_cfg.get("scaling", False),
         "scaler": prep_cfg.get("scaler", None),
-
+        "use_network_features": features_cfg.get("use_network_features", False),
+        "drop_original_port_columns": features_cfg.get("drop_original_port_columns", False),
         "feature_selection": features_cfg.get("use_feature_selection", False),
         "feature_selection_method": features_cfg.get("feature_selection_method", None),
         "selected_k_features": features_cfg.get("selected_k_features", None),
@@ -673,7 +674,8 @@ def save_visualizations(metrics: dict, config: dict, logger: logging.Logger, his
 
     if history_df is not None:
         plot_training_history(history_df, config, logger)
-        plot_learning_rate_curve(history_df, config, logger)
+        if config["model"].get("scheduler_enabled", False):
+            plot_learning_rate_curve(history_df, config, logger)
 
 def calculate_binary_metrics(y_true, y_pred, y_proba) -> dict:
     return {
@@ -1136,7 +1138,7 @@ def main() -> None:
     if stage_1_enabled:
         logger.info("Tuning mode enabled")
 
-        best_stage_1_params, best_stage_1_model, stage_1_results_df, best_history_df, best_training_summary = tuning_stage_1(
+        best_stage_1_params, _, stage_1_results_df, best_history_df, best_training_summary = tuning_stage_1(
             X_train=X_train, y_train=y_train, X_val=X_val, y_val=y_val, config=config, device=device, logger=logger)
 
         if config["output"]["save_tuning_results"]:
@@ -1172,7 +1174,7 @@ def main() -> None:
             logger.info("Tuning stage 2 is enabled")
             val_final_loader = create_dataloader(X_train_final, y_train_final, batch_size=batch_size, shuffle=False)
 
-            best_stage_2_params, stage_2_results_df = tuning_stage_2(model=final_model, val_loader=val_final_loader,
+            best_stage_2_params, _ = tuning_stage_2(model=final_model, val_loader=val_final_loader,
                 config=config, device=device, logger=logger)
 
             best_threshold = best_stage_2_params["decision_threshold"]
