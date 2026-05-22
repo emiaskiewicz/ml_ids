@@ -25,9 +25,9 @@ CONFIG_PATH = BASE_DIR / "config" / "cnn.yaml"
 RESULTS_COLUMNS = ["experiment", "dataset_variant", "split", "accuracy", "precision", "recall", "f1", "roc_auc",
                    "average_precision", "threshold", "scaling", "scaler", "feature_selection", "feature_selection_method",
                    "selected_k_features", "smote", "use_pos_weight", "pos_weight_mode", "pos_weight_value", "conv_channels", "kernel_size", "fc_layers",
-                   "activation", "batch_norm", "dropout", "learning_rate", "batch_size", "epochs","gradient_clip_norm", "scheduler_enabled", "scheduler_factor",
-                   "scheduler_patience", "scheduler_min_lr", "weight_decay", "device", "early_stopping", "patience",
-                   "min_delta", "actual_epochs", "best_epoch", "best_val_loss", "tuning_stage_1", "tuning_stage_2"]
+                   "activation", "batch_norm", "dropout", "learning_rate", "batch_size", "epochs","gradient_clip_norm", "global_pooling",
+                   "scheduler_enabled", "scheduler_factor", "scheduler_patience", "scheduler_min_lr", "weight_decay", "device", 
+                   "early_stopping", "patience", "min_delta", "actual_epochs", "best_epoch", "best_val_loss", "tuning_stage_1", "tuning_stage_2"]
 
 def load_config(config_path: Path) -> dict:
     with config_path.open("r", encoding="utf-8") as file:
@@ -58,7 +58,7 @@ def get_activation_layer(activation_name: str) -> nn.Module:
 
 class CNNNetwork(nn.Module):
     def __init__(self, input_dim: int, conv_channels: list[int], kernel_size: int, fc_layers: list[int], dropout: float, 
-                 activation: str, batch_norm: bool):
+                 activation: str, batch_norm: bool, global_pooling: bool):
         super().__init__()
 
         if kernel_size % 2 == 0:
@@ -79,9 +79,11 @@ class CNNNetwork(nn.Module):
             in_channels = out_channels
 
         self.features = nn.Sequential(*conv_layers)
+        self.global_pooling = global_pooling
+        self.pool = nn.AdaptiveAvgPool1d(1) if global_pooling else None
 
         classifier_layers = []
-        previous_dim = conv_channels[-1] * input_dim
+        previous_dim = conv_channels[-1] if global_pooling else conv_channels[-1] * input_dim
 
         for hidden_dim in fc_layers:
             classifier_layers.append(nn.Linear(previous_dim, hidden_dim))
@@ -96,6 +98,10 @@ class CNNNetwork(nn.Module):
 
     def forward(self, x):
         x = self.features(x)
+
+        if self.global_pooling:
+            x = self.pool(x)
+
         x = torch.flatten(x, start_dim=1)
         return self.classifier(x).squeeze(1)
 
@@ -148,7 +154,8 @@ def build_model(input_dim: int, config: dict, overrides: dict, logger) -> CNNNet
 
     logger.info("Building CNN model")
     logger.info(f"Model parameters: input_dim={input_dim}, conv_channels={model_cfg['conv_channels']}, kernel_size={model_cfg['kernel_size']},"
-                f" fc_layers={model_cfg['fc_layers']}, dropout={model_cfg['dropout']}, activation={model_cfg['activation']}, batch_norm={model_cfg['batch_norm']}")
+                f" fc_layers={model_cfg['fc_layers']}, dropout={model_cfg['dropout']}, activation={model_cfg['activation']},"
+                f" batch_norm={model_cfg['batch_norm']}, global_pooling={model_cfg['global_pooling']}")
 
     model = CNNNetwork(
         input_dim=input_dim,
@@ -157,7 +164,8 @@ def build_model(input_dim: int, config: dict, overrides: dict, logger) -> CNNNet
         fc_layers=model_cfg["fc_layers"],
         dropout=model_cfg["dropout"],
         activation=model_cfg.get("activation", "relu"),
-        batch_norm=model_cfg["batch_norm"]
+        batch_norm=model_cfg["batch_norm"],
+        global_pooling=model_cfg["global_pooling"]
     )
 
     return model
@@ -540,6 +548,7 @@ def build_results_summary_row(metrics: dict, config: dict, model_params: dict | 
         "pos_weight_mode": model_params.get("pos_weight_mode", "auto"),
         "pos_weight_value": training_summary["pos_weight_value"],
 
+        "global_pooling": model_params.get("global_pooling", model_cfg.get("global_pooling")),
         "gradient_clip_norm": model_params.get("gradient_clip_norm", model_cfg.get("gradient_clip_norm")),
         "conv_channels": model_params.get("conv_channels", model_cfg.get("conv_channels")),
         "kernel_size": model_params.get("kernel_size", model_cfg.get("kernel_size")),
