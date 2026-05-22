@@ -21,22 +21,69 @@ features:
   use_feature_selection: false
   feature_selection_method: "select_k_best" #"rfe"
   selected_k_features: 40
-
-preprocessing:
   smote: false
   scaling: true
   scaler: "standard"
+  use_network_features: false
+  drop_original_port_columns: false
 
 model:
-  key: val
+  conv_channels: [16, 32]
+  kernel_size: 3
+  fc_layers: [64]
+  activation: "relu"
+  dropout: 0.2
+  learning_rate: 0.001
+  batch_size: 4096
+  epochs: 200
+  weight_decay: 0.0001
+  decision_threshold: 0.5
+  device: "auto"
+  early_stopping: true
+  patience: 5
+  min_delta: 0.0001
+  use_pos_weight: false
+  pos_weight_mode: "auto"
+  pos_weight_value: 1.0
+  batch_norm: false
+  scheduler_enabled: false
+  scheduler_factor: 0.5
+  scheduler_patience: 2
+  scheduler_min_lr: 0.000001
+  gradient_clip_norm: null
+  global_pooling: true
+  input_dropout: 0.0
+  input_noise_std: 0.0
 
 tuning_stage_1:
   enabled: false
   metric: f1
+  param_grid:
+    conv_channels:
+      - [16, 32]
+      - [32, 64]
+    kernel_size: [3, 5]
+    fc_layers:
+      - [64]
+    activation: ["relu"]
+    dropout: [0.1, 0.2]
+    batch_norm: [false, true]
+    learning_rate: [0.001, 0.0005]
+    batch_size: [4096]
+    weight_decay: [0.0001]
+    use_pos_weight: [false]
+    scheduler_enabled: [false]
+    global_pooling: [true]
+    input_dropout: [0.0, 0.1]
+    input_noise_std: [0.0]
+    gradient_clip_norm: [null]
 
 tuning_stage_2:
   enabled: false
   metric: f1
+  threshold_start: 0.1
+  threshold_stop: 0.9
+  threshold_step: 0.05
 
 output:
   output_dir: "outputs/cnn/easy/CNN-01e"
@@ -45,7 +92,7 @@ output:
   save_plots: true
   save_predictions: true
   save_tuning_results: true
-  save_best_config: true
+  evaluate_test: false
 
 logging:
   log_path: "logs/cnn/easy/CNN-01e.log"
