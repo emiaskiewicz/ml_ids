@@ -15,7 +15,54 @@ SKIP_FINISHED = True
 EVALUATE_TEST = False
 
 experiments = [
-    {"id": "CNN-01e", "scaling": True, "correlation": False, "feature_selection": False, "stage_1": True, "stage_2": True},
+    {"id": "CNN-01e", "scaling": True, "correlation": False, "feature_selection": False,
+     "network_features": False, "drop_original_ports": False, "smote": False, "stage_1": False, "stage_2": False},
+    {"id": "CNN-02e", "scaling": True, "correlation": True, "feature_selection": False,
+     "network_features": False, "drop_original_ports": False, "smote": False, "stage_1": False, "stage_2": False},
+    {"id": "CNN-03e", "scaling": True, "correlation": False, "feature_selection": True,
+     "network_features": False, "drop_original_ports": False, "smote": False, "stage_1": False, "stage_2": False},
+    {"id": "CNN-04e", "scaling": True, "correlation": True, "feature_selection": True,
+     "network_features": False, "drop_original_ports": False, "smote": False, "stage_1": False, "stage_2": False},
+    {"id": "CNN-05e", "scaling": True, "correlation": False, "feature_selection": False,
+     "network_features": True, "drop_original_ports": False, "smote": False, "stage_1": False, "stage_2": False},
+    {"id": "CNN-06e", "scaling": True, "correlation": True, "feature_selection": False,
+     "network_features": True, "drop_original_ports": False, "smote": False, "stage_1": False, "stage_2": False},
+    {"id": "CNN-07e", "scaling": True, "correlation": False, "feature_selection": True,
+     "network_features": True, "drop_original_ports": False, "smote": False, "stage_1": False, "stage_2": False},
+    {"id": "CNN-08e", "scaling": True, "correlation": True, "feature_selection": True,
+     "network_features": True, "drop_original_ports": False, "smote": False, "stage_1": False, "stage_2": False},
+    {"id": "CNN-09e", "scaling": True, "correlation": False, "feature_selection": False,
+     "network_features": True, "drop_original_ports": True, "smote": False, "stage_1": False, "stage_2": False},
+    {"id": "CNN-10e", "scaling": True, "correlation": True, "feature_selection": False,
+     "network_features": True, "drop_original_ports": True, "smote": False, "stage_1": False, "stage_2": False},
+    {"id": "CNN-11e", "scaling": True, "correlation": False, "feature_selection": True,
+     "network_features": True, "drop_original_ports": True, "smote": False, "stage_1": False, "stage_2": False},
+    {"id": "CNN-12e", "scaling": True, "correlation": True, "feature_selection": True,
+     "network_features": True, "drop_original_ports": True, "smote": False, "stage_1": False, "stage_2": False},
+    {"id": "CNN-13e", "scaling": True, "correlation": False, "feature_selection": False,
+     "network_features": False, "drop_original_ports": False, "smote": True, "stage_1": False, "stage_2": False},
+    {"id": "CNN-14e", "scaling": True, "correlation": True, "feature_selection": False,
+     "network_features": False, "drop_original_ports": False, "smote": True, "stage_1": False, "stage_2": False},
+    {"id": "CNN-15e", "scaling": True, "correlation": False, "feature_selection": True,
+     "network_features": False, "drop_original_ports": False, "smote": True, "stage_1": False, "stage_2": False},
+    {"id": "CNN-16e", "scaling": True, "correlation": True, "feature_selection": True,
+     "network_features": False, "drop_original_ports": False, "smote": True, "stage_1": False, "stage_2": False},
+    {"id": "CNN-17e", "scaling": True, "correlation": False, "feature_selection": False,
+     "network_features": True, "drop_original_ports": False, "smote": True, "stage_1": False, "stage_2": False},
+    {"id": "CNN-18e", "scaling": True, "correlation": True, "feature_selection": False,
+     "network_features": True, "drop_original_ports": False, "smote": True, "stage_1": False, "stage_2": False},
+    {"id": "CNN-19e", "scaling": True, "correlation": False, "feature_selection": True,
+     "network_features": True, "drop_original_ports": False, "smote": True, "stage_1": False, "stage_2": False},
+    {"id": "CNN-20e", "scaling": True, "correlation": True, "feature_selection": True,
+     "network_features": True, "drop_original_ports": False, "smote": True, "stage_1": False, "stage_2": False},
+    {"id": "CNN-21e", "scaling": True, "correlation": False, "feature_selection": False,
+     "network_features": True, "drop_original_ports": True, "smote": True, "stage_1": False, "stage_2": False},
+    {"id": "CNN-22e", "scaling": True, "correlation": True, "feature_selection": False,
+     "network_features": True, "drop_original_ports": True, "smote": True, "stage_1": False, "stage_2": False},
+    {"id": "CNN-23e", "scaling": True, "correlation": False, "feature_selection": True,
+     "network_features": True, "drop_original_ports": True, "smote": True, "stage_1": False, "stage_2": False},
+    {"id": "CNN-24e", "scaling": True, "correlation": True, "feature_selection": True,
+     "network_features": True, "drop_original_ports": True, "smote": True, "stage_1": False, "stage_2": False},
 ]
 
 def format_duration(seconds: float) -> str:
@@ -46,9 +93,9 @@ def apply_experiment_settings(config: dict, exp: dict) -> dict:
     config["features"]["scaling"] = exp["scaling"]
     config["features"]["remove_correlated_features"] = exp["correlation"]
     config["features"]["use_feature_selection"] = exp["feature_selection"]
-    config["features"]["log_transform"] = exp["log_transform"]
     config["features"]["use_network_features"] = exp["network_features"]
     config["features"]["drop_original_port_columns"] = exp["drop_original_ports"]
+    config["features"]["smote"] = exp["smote"]
 
     config["tuning_stage_1"]["enabled"] = exp["stage_1"]
     config["tuning_stage_2"]["enabled"] = exp["stage_2"]
@@ -63,9 +110,9 @@ def apply_experiment_settings(config: dict, exp: dict) -> dict:
 def experiment_finished(config: dict) -> bool:
     output_dir = PROJECT_DIR / config["output"]["output_dir"]
     if EVALUATE_TEST:
-        return (output_dir / "validation_metrics.json").exists()
-    else:
         return (output_dir / "test_metrics.json").exists()
+    else:
+        return (output_dir / "validation_metrics.json").exists()
 
 def run_experiment(exp_id: str) -> int:
     LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -106,7 +153,7 @@ def main() -> None:
         print(f"[{index}/{len(experiments)}] Running: {exp_id}")
         print(f"Dataset: {DATASET_VARIANT}")
         print(f"Scaling={exp['scaling']}, Corr={exp['correlation']}, FS={exp['feature_selection']}, "
-              f"Log={exp['log_transform']}, NetFeat={exp['network_features']}, DropPorts={exp['drop_original_ports']},"
+              f"NetFeat={exp['network_features']}, DropPorts={exp['drop_original_ports']}, SMOTE={exp['smote']}, "
               f"Stage1={exp['stage_1']}, Stage2={exp['stage_2']}")
         print(f"Output: {config['output']['output_dir']}")
         print(f"Log: {config['logging']['log_path']}")
