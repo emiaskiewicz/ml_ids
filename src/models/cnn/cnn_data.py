@@ -52,6 +52,59 @@ def separate_features_and_target(train_df: pd.DataFrame, val_df: pd.DataFrame, t
 
     return X_train, X_val, X_test, y_train, y_val, y_test
 
+def add_network_port_protocol_features(X_train: pd.DataFrame, X_val: pd.DataFrame, X_test: pd.DataFrame, drop_original_columns: bool,
+                                       logger) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    port_protocol_columns = ["Source_Port", "Destination_Port", "Protocol"]
+
+    for column in port_protocol_columns:
+        for dataset_name, X in [("X_train", X_train), ("X_val", X_val), ("X_test", X_test)]:
+            if column not in X.columns:
+                logger.critical(f"Column {column} not found in {dataset_name}")
+                exit(1)
+
+    def add_features(X: pd.DataFrame) -> pd.DataFrame:
+        X = X.copy()
+
+        src_port = X["Source_Port"]
+        dst_port = X["Destination_Port"]
+        protocol = X["Protocol"]
+
+        X["protocol_tcp"] = (protocol == 6).astype(int)
+        X["protocol_udp"] = (protocol == 17).astype(int)
+        X["protocol_icmp"] = (protocol == 1).astype(int)
+
+        X["src_port_is_well_known"] = src_port.between(0, 1023).astype(int)
+        X["src_port_is_registered"] = src_port.between(1024, 49151).astype(int)
+        X["src_port_is_ephemeral"] = src_port.between(49152, 65535).astype(int)
+        X["dst_port_is_well_known"] = dst_port.between(0, 1023).astype(int)
+        X["dst_port_is_registered"] = dst_port.between(1024, 49151).astype(int)
+        X["dst_port_is_ephemeral"] = dst_port.between(49152, 65535).astype(int)
+
+        X["dst_port_is_dns"] = (dst_port == 53).astype(int)
+        X["dst_port_is_http"] = (dst_port == 80).astype(int)
+        X["dst_port_is_https"] = (dst_port == 443).astype(int)
+        X["dst_port_is_ssh"] = (dst_port == 22).astype(int)
+        X["dst_port_is_smtp"] = (dst_port == 25).astype(int)
+        X["dst_port_is_ntp"] = (dst_port == 123).astype(int)
+        X["dst_port_is_ftp"] = dst_port.isin([20, 21]).astype(int)
+        X["dst_port_is_rdp"] = (dst_port == 3389).astype(int)
+
+        X["same_src_dst_port"] = (src_port == dst_port).astype(int)
+        X["src_port_zero"] = (src_port == 0).astype(int)
+        X["dst_port_zero"] = (dst_port == 0).astype(int)
+
+        if drop_original_columns:
+            X = X.drop(columns=port_protocol_columns)
+            logger.info(f"Added network port/protocol features. Dropped original port/protocol columns: {port_protocol_columns}")
+        return X
+
+    X_train = add_features(X_train)
+    X_val = add_features(X_val)
+    X_test = add_features(X_test)
+
+    logger.info(f"Added network port/protocol features. New shapes - X_train: {X_train.shape}, X_val: {X_val.shape}, X_test: {X_test.shape}")
+    return X_train, X_val, X_test
+
 def compute_correlation_matrix(df: pd.DataFrame, logger) -> pd.DataFrame:
     logger.info("Computing correlation matrix")
     corr_matrix = df.corr(numeric_only=True)
@@ -201,6 +254,12 @@ def prepare_cnn_data(config: dict):
     else:
         logger.error(f"Loading existing split data failed")
         exit(1)
+
+    if features_cfg.get("use_network_features", False):
+        logger.info("Network port/protocol features are enabled")
+        X_train, X_val, X_test = add_network_port_protocol_features(X_train, X_val, X_test, features_cfg["drop_original_port_columns"], logger)
+    else:
+        logger.info("Network port/protocol features are disabled")
 
     logger.info(f"Training class distribution:\n{y_train.value_counts().sort_index()}")
     logger.info(f"Validation class distribution:\n{y_val.value_counts().sort_index()}")
