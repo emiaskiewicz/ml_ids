@@ -12,56 +12,15 @@ DATASET_VARIANT = "easy"
 LOG_PATH = PROJECT_DIR / "logs" / "autoencoder" / DATASET_VARIANT / "runner.log"
 STOP_ON_ERROR = True
 SKIP_FINISHED = True
+EVALUATE_TEST = False
 
 experiments = [
-    {"id": "AE-01e", "scaling": True, "correlation": False, "feature_selection": False, "log_transform": False,
-     "network_features": False, "drop_original_ports": False, "stage_1": False, "stage_2": False},
-    {"id": "AE-02e", "scaling": True, "correlation": True, "feature_selection": False, "log_transform": False,
-     "network_features": False, "drop_original_ports": False, "stage_1": False, "stage_2": False},
-    {"id": "AE-03e", "scaling": True, "correlation": False, "feature_selection": True, "log_transform": False,
-     "network_features": False, "drop_original_ports": False, "stage_1": False, "stage_2": False},
-    {"id": "AE-04e", "scaling": True, "correlation": True, "feature_selection": True, "log_transform": False,
-     "network_features": False, "drop_original_ports": False, "stage_1": False, "stage_2": False},
-    {"id": "AE-05e", "scaling": True, "correlation": False, "feature_selection": False, "log_transform": True,
-     "network_features": False, "drop_original_ports": False, "stage_1": False, "stage_2": False},
-    {"id": "AE-06e", "scaling": True, "correlation": True, "feature_selection": False, "log_transform": True,
-     "network_features": False, "drop_original_ports": False, "stage_1": False, "stage_2": False},
-    {"id": "AE-07e", "scaling": True, "correlation": False, "feature_selection": True, "log_transform": True,
-     "network_features": False, "drop_original_ports": False, "stage_1": False, "stage_2": False},
-    {"id": "AE-08e", "scaling": True, "correlation": True, "feature_selection": True, "log_transform": True,
-     "network_features": False, "drop_original_ports": False, "stage_1": False, "stage_2": False},
-    {"id": "AE-09e", "scaling": True, "correlation": False, "feature_selection": False, "log_transform": False,
-     "network_features": True, "drop_original_ports": False, "stage_1": False, "stage_2": False},
-    {"id": "AE-10e", "scaling": True, "correlation": True, "feature_selection": False, "log_transform": False,
-     "network_features": True, "drop_original_ports": False, "stage_1": False, "stage_2": False},
-    {"id": "AE-11e", "scaling": True, "correlation": False, "feature_selection": True, "log_transform": False,
-     "network_features": True, "drop_original_ports": False, "stage_1": False, "stage_2": False},
-    {"id": "AE-12e", "scaling": True, "correlation": True, "feature_selection": True, "log_transform": False,
-     "network_features": True, "drop_original_ports": False, "stage_1": False, "stage_2": False},
-    {"id": "AE-13e", "scaling": True, "correlation": False, "feature_selection": False, "log_transform": True,
-     "network_features": True, "drop_original_ports": False, "stage_1": False, "stage_2": False},
-    {"id": "AE-14e", "scaling": True, "correlation": True, "feature_selection": False, "log_transform": True,
-     "network_features": True, "drop_original_ports": False, "stage_1": False, "stage_2": False},
-    {"id": "AE-15e", "scaling": True, "correlation": False, "feature_selection": True, "log_transform": True,
-     "network_features": True, "drop_original_ports": False, "stage_1": False, "stage_2": False},
-    {"id": "AE-16e", "scaling": True, "correlation": True, "feature_selection": True, "log_transform": True,
-     "network_features": True, "drop_original_ports": False, "stage_1": False, "stage_2": False},
-    {"id": "AE-17e", "scaling": True, "correlation": False, "feature_selection": False, "log_transform": False,
-     "network_features": True, "drop_original_ports": True, "stage_1": False, "stage_2": False},
-    {"id": "AE-18e", "scaling": True, "correlation": True, "feature_selection": False, "log_transform": False,
-     "network_features": True, "drop_original_ports": True, "stage_1": False, "stage_2": False},
-    {"id": "AE-19e", "scaling": True, "correlation": False, "feature_selection": True, "log_transform": False,
-     "network_features": True, "drop_original_ports": True, "stage_1": False, "stage_2": False},
-    {"id": "AE-20e", "scaling": True, "correlation": True, "feature_selection": True, "log_transform": False,
-     "network_features": True, "drop_original_ports": True, "stage_1": False, "stage_2": False},
-    {"id": "AE-21e", "scaling": True, "correlation": False, "feature_selection": False, "log_transform": True,
-     "network_features": True, "drop_original_ports": True, "stage_1": False, "stage_2": False},
-    {"id": "AE-22e", "scaling": True, "correlation": True, "feature_selection": False, "log_transform": True,
-     "network_features": True, "drop_original_ports": True, "stage_1": False, "stage_2": False},
-    {"id": "AE-23e", "scaling": True, "correlation": False, "feature_selection": True, "log_transform": True,
-     "network_features": True, "drop_original_ports": True, "stage_1": False, "stage_2": False},
-    {"id": "AE-24e", "scaling": True, "correlation": True, "feature_selection": True, "log_transform": True,
-     "network_features": True, "drop_original_ports": True, "stage_1": False, "stage_2": False},
+    {"id": "AE-13e-tune", "scaling": True, "correlation": False, "feature_selection": False, "log_transform": True,
+        "network_features": True, "drop_original_ports": False, "stage_1": True, "stage_2": True},
+    {"id": "AE-21e-tune", "scaling": True, "correlation": False, "feature_selection": False, "log_transform": True,
+        "network_features": True, "drop_original_ports": True, "stage_1": True, "stage_2": True},
+    {"id": "AE-24e-tune", "scaling": True, "correlation": True, "feature_selection": True, "log_transform": True,
+     "network_features": True, "drop_original_ports": True, "stage_1": True, "stage_2": True}
 ]
 
 def format_duration(seconds: float) -> str:
@@ -99,6 +58,7 @@ def apply_experiment_settings(config: dict, exp: dict) -> dict:
     config["tuning_stage_1"]["enabled"] = exp["stage_1"]
     config["tuning_stage_2"]["enabled"] = exp["stage_2"]
 
+    config["output"]["evaluate_test"] = EVALUATE_TEST
     config["output"]["output_dir"] = f"outputs/autoencoder/{DATASET_VARIANT}/{exp_id}"
     config["logging"]["log_path"] = f"logs/autoencoder/{DATASET_VARIANT}/{exp_id}.log"
     config["output"]["summary_path"] = f"outputs/autoencoder/{DATASET_VARIANT}/ae_{DATASET_VARIANT}_results_sum.csv"
@@ -107,7 +67,10 @@ def apply_experiment_settings(config: dict, exp: dict) -> dict:
 
 def experiment_finished(config: dict) -> bool:
     output_dir = PROJECT_DIR / config["output"]["output_dir"]
-    return (output_dir / "test_metrics.json").exists()
+    if EVALUATE_TEST:
+        return (output_dir / "validation_metrics.json").exists()
+    else:
+        return (output_dir / "test_metrics.json").exists()
 
 def run_experiment(exp_id: str) -> int:
     LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -142,7 +105,7 @@ def main() -> None:
 
         if SKIP_FINISHED and experiment_finished(config):
             print(f"[{index}/{len(experiments)}] SKIP: {exp_id}")
-            print("Reason: test_metrics.json already exists")
+            print("Reason: test_metrics.json or validation_metrics.json already exists")
             continue
 
         print(f"[{index}/{len(experiments)}] Running: {exp_id}")
