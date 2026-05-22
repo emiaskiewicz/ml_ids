@@ -74,13 +74,13 @@ class CNNNetwork(nn.Module):
         self.input_noise = InputNoise(input_noise_std)
         self.input_dropout = nn.Dropout(input_dropout)
 
-        if kernel_size % 2 == 0:
-            #TODO: Consider allowing even kernel sizes with "valid" padding and adjusting the classifier input dimension accordingly
-            raise ValueError("kernel_size should be odd to preserve feature length with padding")
-
         conv_layers = []
         in_channels = 1
-        padding = kernel_size // 2
+        padding = 0 if kernel_size % 2 == 0 else kernel_size // 2
+        conv_output_dim = input_dim if padding > 0 else input_dim - len(conv_channels) * (kernel_size - 1)
+
+        if conv_output_dim <= 0:
+            raise ValueError(f"kernel_size={kernel_size} with {len(conv_channels)} convolutional layers reduces input_dim={input_dim} to non-positive feature length")
 
         for out_channels in conv_channels:
             conv_layers.append(nn.Conv1d(in_channels=in_channels, out_channels=out_channels, kernel_size=kernel_size, padding=padding))
@@ -96,7 +96,7 @@ class CNNNetwork(nn.Module):
         self.pool = nn.AdaptiveAvgPool1d(1) if global_pooling else None
 
         classifier_layers = []
-        previous_dim = conv_channels[-1] if global_pooling else conv_channels[-1] * input_dim
+        previous_dim = conv_channels[-1] if global_pooling else conv_channels[-1] * conv_output_dim
 
         for hidden_dim in fc_layers:
             classifier_layers.append(nn.Linear(previous_dim, hidden_dim))
