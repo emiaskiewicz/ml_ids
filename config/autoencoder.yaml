@@ -63,17 +63,14 @@ tuning_stage_1:
       - [128, 64]
       - [128, 64, 32]
     latent_dim: [8, 16, 32]
-    dropout: [0.0, 0.1, 0.2]
+    dropout: [0.0, 0.1]
     batch_norm: [false, true]
     learning_rate: [0.001, 0.0005]
     batch_size: [4096]
     weight_decay: [0.0001]
-    loss_function: ["mse", "mae", "smooth_l1"]
-    scheduler_enabled: [false, true]
-    scheduler_patience: [5, 10]
-    scheduler_factor: [0.5]
-    denoising: [false, true]
-    noise_std: [0.01, 0.05, 0.1]
+    loss_function: ["mse", "smooth_l1"]
+    scheduler_enabled: [false]
+    denoising: [false]
 
 tuning_stage_2:
   enabled: false
@@ -88,6 +85,7 @@ output:
   save_model: true
   save_predictions: true
   save_tuning_results: true
+  evaluate_test: false
 
 logging:
   log_path: "logs/autoencoder/easy/AE-01e.log"

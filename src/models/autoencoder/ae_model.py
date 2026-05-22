@@ -1,6 +1,5 @@
 import logging
 import csv
-#import winsound
 from pathlib import Path
 import yaml
 from ae_data import prepare_ae_data, get_logger
@@ -1207,9 +1206,12 @@ def main() -> None:
             threshold=final_threshold, device=device, config=best_config, logger=logger,
             training_summary=best_training_summary, history_df=best_history_df, model_params=best_stage_1_params)
 
-        evaluate_and_save_split(model=best_model, data_loader=test_loader, split_name="Test", threshold=final_threshold,
-            device=device, config=best_config, logger=logger, training_summary=best_training_summary, history_df=None,
-            model_params=best_stage_1_params)
+        if config["output"]["evaluate_test"]:
+            evaluate_and_save_split(model=best_model, data_loader=test_loader, split_name="Test", threshold=final_threshold,
+                device=device, config=best_config, logger=logger, training_summary=best_training_summary, history_df=None,
+                model_params=best_stage_1_params)
+        else:
+            logger.info("Test evaluation disabled for this run")
 
     else:
         logger.info("Standard run mode")
@@ -1239,11 +1241,13 @@ def main() -> None:
             threshold=threshold, device=device, config=config, logger=logger, training_summary=training_summary,
             history_df=history_df)
 
-        evaluate_and_save_split(model=model, data_loader=test_loader, split_name="Test", threshold=threshold,
-            device=device, config=config, logger=logger, training_summary=training_summary, history_df=None)
+        if config["output"]["evaluate_test"]:
+            evaluate_and_save_split(model=model, data_loader=test_loader, split_name="Test", threshold=threshold,
+                device=device, config=config, logger=logger, training_summary=training_summary, history_df=None)
+        else:
+            logger.info("Test evaluation disabled for this run")
 
     logger.info("Autoencoder experiment completed")
-    # winsound.Beep(2500, 1000)
 
 if __name__ == "__main__":
     main()
