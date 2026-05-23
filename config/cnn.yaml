@@ -21,11 +21,13 @@ features:
   use_feature_selection: false
   feature_selection_method: "select_k_best" #"rfe"
   selected_k_features: 40
+  use_network_features: false
+  drop_original_port_columns: false
+
+preprocessing:
   smote: false
   scaling: true
   scaler: "standard"
-  use_network_features: false
-  drop_original_port_columns: false
 
 model:
   conv_channels: [16, 32]
