@@ -1,5 +1,5 @@
 experiment:
-  name: "AE-21e-tune2"
+  name: "AE-21e-final"
   random_state: 23
 
 data:
@@ -38,7 +38,7 @@ model:
   batch_norm: true
   dropout: 0.0
   loss_function: "mse"
-  reconstruction_threshold: 0.0568
+  reconstruction_threshold: 0.056787677109241486
   learning_rate: 0.001
   batch_size: 4096
   epochs: 200
@@ -55,13 +55,13 @@ model:
   noise_std: 0.05
 
 tuning_stage_1:
-  enabled: false
+  enabled: true
   metric: "average_precision"
   param_grid:
     encoder_layers:
       - [128, 64, 32]
     latent_dim: [8]
-    dropout: [0.0, 0.001]
+    dropout: [0.0, 0.05]
     batch_norm: [true]
     learning_rate: [0.001]
     batch_size: [4096]
@@ -75,20 +75,20 @@ tuning_stage_1:
     noise_std: [0.02, 0.05, 0.1]
 
 tuning_stage_2:
-  enabled: false
+  enabled: true
   metric: "f1"
   threshold_candidates: 200
 
 output:
-  output_dir: "outputs/autoencoder/easy/AE-21e-tune2"
+  output_dir: "outputs/autoencoder/easy/AE-21e-final"
   summary_path: "outputs/autoencoder/easy/ae_e_results_sum.csv"
   save_metrics: true
   save_plots: true
   save_model: true
   save_predictions: true
   save_tuning_results: true
-  evaluate_test: false
+  evaluate_test: true
 
 logging:
-  log_path: "logs/autoencoder/easy/AE-21e-tune2.log"
+  log_path: "logs/autoencoder/easy/AE-21e-final.log"
   log_level: "INFO"

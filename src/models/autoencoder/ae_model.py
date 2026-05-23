@@ -675,6 +675,8 @@ def plot_reconstruction_error_histogram(metrics: dict, config: dict, logger: log
     ax.hist(attack_errors, bins=50, alpha=0.6, label="ATTACK")
     ax.axvline(metrics["threshold_used"], linestyle="--", label=f"threshold={metrics['threshold_used']:.6f}")
 
+    ax.set_xlim(0.0, 1.5)
+    ax.set_ylim(0, 50000)
     ax.set_xlabel("Reconstruction error")
     ax.set_ylabel("Count")
     ax.set_title(f"{metrics['split_name']} - Reconstruction error distribution")
@@ -1092,6 +1094,8 @@ def plot_threshold_tuning_results(results_df: pd.DataFrame, metric_name: str, co
     ax.axvline(best_threshold, linestyle="--", alpha=0.7, label=f"best threshold={best_threshold:.6f}")
     ax.scatter([best_threshold], [best_metric_value])
     ax.set_xlabel("Reconstruction threshold")
+    ax.set_xlim(0.0, 0.15)
+    ax.set_ylim(0.55, 0.90)
     ax.set_ylabel(metric_name)
     ax.set_title(f"Reconstruction threshold tuning - {metric_name}")
     ax.legend()
