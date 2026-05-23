@@ -1154,6 +1154,39 @@ def train_final_model(model: nn.Module, train_loader: DataLoader, y_train_final:
 
     return model, loss_info
 
+def save_model(model: nn.Module, config: dict, logger: logging.Logger, input_dim: int, feature_columns: list[str] | None = None,
+               model_params: dict | None = None, threshold: float | None = None, training_summary: dict | None = None) -> None:
+    output_dir = BASE_DIR / config["output"]["output_dir"]
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    save_path = output_dir / "model.pt"
+    model_config = config["model"].copy()
+
+    if model_params is not None:
+        model_config.update(model_params)
+
+    checkpoint = {
+        "experiment": config["experiment"]["name"],
+        "dataset_variant": config["data"]["dataset_variant"],
+        "model_type": "cnn",
+        "model_class": model.__class__.__name__,
+        "input_dim": input_dim,
+        "input_shape": [1, input_dim],
+        "feature_columns": feature_columns,
+        "model_config": model_config,
+        "decision_threshold": threshold,
+        "training_summary": training_summary,
+        "state_dict": {
+            key: value.detach().cpu()
+            for key, value in model.state_dict().items()
+        },
+        "full_config": config
+    }
+
+    torch.save(checkpoint, save_path)
+
+    logger.info(f"Saved CNN model checkpoint to: {save_path}")
+
 def main() -> None:
     config = load_config(CONFIG_PATH)
     logger = get_logger(config)
@@ -1219,6 +1252,11 @@ def main() -> None:
         evaluate_and_save_split(model=final_model, data_loader=test_loader, split_name="Test", threshold=best_threshold,
                                 device=device, config=config, logger=logger, training_summary=best_training_summary,
                                 history_df=best_history_df, model_params=best_stage_1_params)
+        
+        if config["output"].get("save_model", False):
+            save_model(model=final_model, config=best_config, logger=logger, input_dim=X_train_final.shape[1], feature_columns=X_train_final.columns.tolist(),
+                model_params=best_stage_1_params, threshold=best_threshold, training_summary=best_training_summary)
+
     else:
         logger.info("Standard run mode")
 
