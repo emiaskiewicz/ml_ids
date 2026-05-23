@@ -1,5 +1,5 @@
 experiment:
-  name: "AE-01e"
+  name: "AE-21e-tune2"
   random_state: 23
 
 data:
@@ -31,14 +31,14 @@ features:
   scaler: "standard"
 
 model:
-  encoder_layers: [64, 32]
-  latent_dim: 16
+  encoder_layers: [128, 64, 32]
+  latent_dim: 8
   activation: "relu"
   output_activation: "none"
-  batch_norm: false
-  dropout: 0.1
+  batch_norm: true
+  dropout: 0.0
   loss_function: "mse"
-  reconstruction_threshold: 0.5
+  reconstruction_threshold: 0.0568
   learning_rate: 0.001
   batch_size: 4096
   epochs: 200
@@ -59,18 +59,20 @@ tuning_stage_1:
   metric: "average_precision"
   param_grid:
     encoder_layers:
-      - [64, 32]
-      - [128, 64]
       - [128, 64, 32]
-    latent_dim: [8, 16, 32]
-    dropout: [0.0, 0.1]
-    batch_norm: [false, true]
-    learning_rate: [0.001, 0.0005]
+    latent_dim: [8]
+    dropout: [0.0, 0.001]
+    batch_norm: [true]
+    learning_rate: [0.001]
     batch_size: [4096]
     weight_decay: [0.0001]
-    loss_function: ["mse", "smooth_l1"]
-    scheduler_enabled: [false]
-    denoising: [false]
+    loss_function: ["mse"]
+    scheduler_enabled: [false, true]
+    scheduler_factor: [0.5]
+    scheduler_patience: [5]
+    scheduler_min_lr: [0.000001]
+    denoising: [false, true]
+    noise_std: [0.02, 0.05, 0.1]
 
 tuning_stage_2:
   enabled: false
@@ -78,7 +80,7 @@ tuning_stage_2:
   threshold_candidates: 200
 
 output:
-  output_dir: "outputs/autoencoder/easy/AE-01e"
+  output_dir: "outputs/autoencoder/easy/AE-21e-tune2"
   summary_path: "outputs/autoencoder/easy/ae_e_results_sum.csv"
   save_metrics: true
   save_plots: true
@@ -88,5 +90,5 @@ output:
   evaluate_test: false
 
 logging:
-  log_path: "logs/autoencoder/easy/AE-01e.log"
+  log_path: "logs/autoencoder/easy/AE-21e-tune2.log"
   log_level: "INFO"
