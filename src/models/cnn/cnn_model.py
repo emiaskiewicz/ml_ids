@@ -29,6 +29,10 @@ RESULTS_COLUMNS = ["experiment", "dataset_variant", "split", "accuracy", "precis
                    "input_dropout", "input_noise_std", "scheduler_enabled", "scheduler_factor", "scheduler_patience", "scheduler_min_lr", "weight_decay", "device", 
                    "early_stopping", "patience", "min_delta", "actual_epochs", "best_epoch", "best_val_loss", "tuning_stage_1", "tuning_stage_2"]
 
+IGNORED_TUNING_PARAMS_RULES = [
+    {"when": {"scheduler_enabled": False}, "ignore": ["scheduler_factor", "scheduler_patience", "scheduler_min_lr"]},
+]
+
 def load_config(config_path: Path) -> dict:
     with config_path.open("r", encoding="utf-8") as file:
         return yaml.safe_load(file)
@@ -787,6 +791,27 @@ def evaluate_and_save_split(model, data_loader, split_name: str, threshold: floa
 
     return metrics
 
+def make_hashable_tuning_value(value):
+    if isinstance(value, list):
+        return tuple(make_hashable_tuning_value(item) for item in value)
+    if isinstance(value, dict):
+        return tuple((key, make_hashable_tuning_value(value[key])) for key in sorted(value))
+    return value
+
+def tuning_rule_matches(params: dict, condition: dict) -> bool:
+    return all(params.get(param_name) == expected_value for param_name, expected_value in condition.items())
+
+def get_effective_tuning_key(params: dict) -> tuple:
+    effective_params = params.copy()
+
+    for rule in IGNORED_TUNING_PARAMS_RULES:
+        if tuning_rule_matches(params, rule["when"]):
+            for param_name in rule["ignore"]:
+                if param_name in effective_params:
+                    effective_params[param_name] = None
+
+    return tuple((param_name, make_hashable_tuning_value(value)) for param_name, value in effective_params.items())
+
 def get_tuning_param_grid(config: dict, logger: logging.Logger) -> list[dict]:
     param_grid_cfg = config["tuning_stage_1"]["param_grid"]
 
@@ -798,15 +823,27 @@ def get_tuning_param_grid(config: dict, logger: logging.Logger) -> list[dict]:
     param_names = list(param_grid_cfg.keys())
     param_values = [param_grid_cfg[param_name] for param_name in param_names]
 
-    param_grid = [
+    raw_param_grid = [
         dict(zip(param_names, combination))
         for combination in product(*param_values)
     ]
 
-    logger.info(f"Generated {len(param_grid)} CNN tuning combinations")
-    logger.info(f"Tuned parameters: {param_names}")
+    seen_effective_configs = set()
+    param_grid = []
 
-    return param_grid
+    for params in raw_param_grid:
+        effective_key = get_effective_tuning_key(params)
+
+        if effective_key in seen_effective_configs:
+            continue
+
+        seen_effective_configs.add(effective_key)
+        param_grid.append(params)
+
+    logger.info(f"Generated {len(param_grid)} Autoencoder tuning combinations")
+    if len(param_grid) < len(raw_param_grid):
+        logger.info(f"Skipped {len(raw_param_grid) - len(param_grid)} duplicate effective tuning combinations")
+    logger.info(f"Tuned parameters: {param_names}")
 
 def run_single_cnn_experiment(params: dict, X_train, X_val, y_train, y_val, config: dict, device, logger: logging.Logger) -> tuple[dict, nn.Module, pd.DataFrame, dict]:
     experiment_config = copy.deepcopy(config)
