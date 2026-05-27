@@ -13,6 +13,7 @@ LOG_PATH = PROJECT_DIR / "logs" / "cnn" / DATASET_VARIANT / "runner.log"
 STOP_ON_ERROR = True
 SKIP_FINISHED = True
 EVALUATE_TEST = False
+SAVE_PLOTS = False
 
 experiments = [
     {"id": "CNN-01e", "scaling": True, "correlation": False, "feature_selection": False,
@@ -90,16 +91,17 @@ def apply_experiment_settings(config: dict, exp: dict) -> dict:
     config["split"]["split_dir"] = f"data/split/{DATASET_VARIANT}/"
     config["split"]["load_existing_split"] = True
 
-    config["features"]["scaling"] = exp["scaling"]
+    config["preprocessing"]["scaling"] = exp["scaling"]
     config["features"]["remove_correlated_features"] = exp["correlation"]
     config["features"]["use_feature_selection"] = exp["feature_selection"]
     config["features"]["use_network_features"] = exp["network_features"]
     config["features"]["drop_original_port_columns"] = exp["drop_original_ports"]
-    config["features"]["smote"] = exp["smote"]
+    config["preprocessing"]["smote"] = exp["smote"]
 
     config["tuning_stage_1"]["enabled"] = exp["stage_1"]
     config["tuning_stage_2"]["enabled"] = exp["stage_2"]
 
+    config["output"]["save_plots"] = SAVE_PLOTS
     config["output"]["evaluate_test"] = EVALUATE_TEST
     config["output"]["output_dir"] = f"outputs/cnn/{DATASET_VARIANT}/{exp_id}"
     config["logging"]["log_path"] = f"logs/cnn/{DATASET_VARIANT}/{exp_id}.log"
