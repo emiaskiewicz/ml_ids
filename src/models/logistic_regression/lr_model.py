@@ -585,11 +585,13 @@ def main() -> None:
             )
 
             final_model = train_model(final_model, X_train_final, y_train_final, logger)
-            save_model(final_model, config, logger, preprocessing_artifacts, best_threshold, best_model_params)
+            if config["output"].get("save_model", False):
+                save_model(final_model, config, logger, preprocessing_artifacts, best_threshold, best_model_params)
 
             evaluate_and_save_split(final_model, X_test, y_test, "Test", best_threshold, config, logger, best_model_params)
         else:
-            save_model(best_stage_1_model, config, logger, preprocessing_artifacts, best_threshold, best_model_params)
+            if config["output"].get("save_model", False):
+                save_model(best_stage_1_model, config, logger, preprocessing_artifacts, best_threshold, best_model_params)
             logger.info("Test evaluation disabled for this run")
 
     else:
@@ -599,7 +601,8 @@ def main() -> None:
         model = train_model(model, X_train, y_train, logger)
 
         threshold = config["model"].get("decision_threshold", 0.5)
-        save_model(model, config, logger, preprocessing_artifacts, threshold)
+        if config["output"].get("save_model", False):
+            save_model(model, config, logger, preprocessing_artifacts, threshold)
 
         evaluate_and_save_split(model, X_val, y_val, "Validation", threshold, config, logger)
 
