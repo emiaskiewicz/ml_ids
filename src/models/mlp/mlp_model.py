@@ -728,7 +728,7 @@ def evaluate_and_save_split(model, data_loader, split_name: str, threshold: floa
     if config["output"]["save_metrics"]:
         save_metrics(metrics, config, logger)
 
-    if config["output"]["save_plots"]:
+    if config["output"].get("save_plots", False):
         save_visualizations(metrics, config, logger, history_df)
 
     if config["output"]["save_predictions"]:
@@ -999,8 +999,11 @@ def tuning_stage_2(model, val_loader, config: dict, device, logger: logging.Logg
         "metric": metric_name
     }
 
-    save_threshold_tuning_results(results_df=threshold_results_df, best_threshold=best_threshold, config=config, logger=logger)
-    plot_threshold_tuning_results(results_df=threshold_results_df, metric_name=metric_name, config=config, logger=logger)
+    if config["output"].get("save_tuning_results", False):
+        save_threshold_tuning_results(results_df=threshold_results_df, best_threshold=best_threshold, config=config, logger=logger)
+
+    if config["output"].get("save_plots", False):
+        plot_threshold_tuning_results(results_df=threshold_results_df, metric_name=metric_name, config=config, logger=logger)
 
     logger.info(f"MLP tuning stage 2 completed. Best threshold={best_threshold:.4f}, metric={metric_name}")
 
@@ -1103,6 +1106,7 @@ def main() -> None:
 
     stage_1_enabled = config.get("tuning_stage_1", {}).get("enabled", False)
     stage_2_enabled = config.get("tuning_stage_2", {}).get("enabled", False)
+    evaluate_test = config["output"].get("evaluate_test", False)
 
     if stage_2_enabled and not stage_1_enabled:
         logger.critical("Tuning stage 2 cannot be enabled without tuning stage 1")
@@ -1125,42 +1129,58 @@ def main() -> None:
         best_config = copy.deepcopy(config)
         best_config["model"].update(best_stage_1_params)
 
-        logger.info("Preparing final train+val dataset for retraining")
-        X_train_final = pd.concat([X_train, X_val], axis=0)
-        y_train_final = pd.concat([y_train, y_val], axis=0)
-        logger.info(f"Final train+val shapes: X={X_train_final.shape}, y={y_train_final.shape}")
-
         batch_size = best_config["model"]["batch_size"]
-        train_final_loader = create_dataloader(X_train_final, y_train_final, batch_size=batch_size, shuffle=True)
+        val_loader = create_dataloader(X_val, y_val, batch_size=batch_size, shuffle=False)
         test_loader = create_dataloader(X_test, y_test, batch_size=batch_size, shuffle=False)
 
-        final_model = build_model(input_dim=X_train_final.shape[1], config=best_config, overrides={}, logger=logger)
-        best_epoch = int(best_training_summary["best_epoch"])
-
-        final_model, final_loss_info = train_final_model(model=final_model, train_loader=train_final_loader, y_train_final=y_train_final,
-                                                         config=best_config, device=device, logger=logger, fixed_epochs=best_epoch)
-
-        best_training_summary.update(final_loss_info)
         best_threshold = best_config["model"].get("decision_threshold", 0.5)
 
         if stage_2_enabled:
             logger.info("Tuning stage 2 is enabled")
-            val_final_loader = create_dataloader(X_train_final, y_train_final, batch_size=batch_size, shuffle=False)
 
-            best_stage_2_params, stage_2_results_df = tuning_stage_2(model=final_model, val_loader=val_final_loader,
-                config=config, device=device, logger=logger)
+            best_stage_2_params, stage_2_results_df = tuning_stage_2(model=best_stage_1_model, val_loader=val_loader,
+                config=best_config, device=device, logger=logger)
 
             best_threshold = best_stage_2_params["decision_threshold"]
 
-        if config["output"].get("save_model", False):
-            save_model(model=final_model, config=best_config, logger=logger, input_dim=X_train_final.shape[1],
-                       feature_columns=preprocessing_artifacts.get("feature_columns"), model_params=best_stage_1_params,
-                       threshold=best_threshold, training_summary=best_training_summary,
-                       preprocessing_artifacts=preprocessing_artifacts)
-
-        evaluate_and_save_split(model=final_model, data_loader=test_loader, split_name="Test", threshold=best_threshold,
-                                device=device, config=config, logger=logger, training_summary=best_training_summary,
+        evaluate_and_save_split(model=best_stage_1_model, data_loader=val_loader, split_name="Validation", threshold=best_threshold,
+                                device=device, config=best_config, logger=logger, training_summary=best_training_summary,
                                 history_df=best_history_df, model_params=best_stage_1_params)
+
+        model_to_save = best_stage_1_model
+        save_input_dim = X_train.shape[1]
+        save_training_summary = best_training_summary
+
+        if evaluate_test:
+            logger.info("Preparing final train+val dataset for retraining")
+            X_train_final = pd.concat([X_train, X_val], axis=0)
+            y_train_final = pd.concat([y_train, y_val], axis=0)
+            logger.info(f"Final train+val shapes: X={X_train_final.shape}, y={y_train_final.shape}")
+
+            train_final_loader = create_dataloader(X_train_final, y_train_final, batch_size=batch_size, shuffle=True)
+            final_model = build_model(input_dim=X_train_final.shape[1], config=best_config, overrides={}, logger=logger)
+            best_epoch = int(best_training_summary["best_epoch"])
+
+            final_model, final_loss_info = train_final_model(model=final_model, train_loader=train_final_loader, y_train_final=y_train_final,
+                                                             config=best_config, device=device, logger=logger, fixed_epochs=best_epoch)
+
+            final_training_summary = best_training_summary.copy()
+            final_training_summary.update(final_loss_info)
+
+            evaluate_and_save_split(model=final_model, data_loader=test_loader, split_name="Test", threshold=best_threshold,
+                                    device=device, config=best_config, logger=logger, training_summary=final_training_summary,
+                                    history_df=None, model_params=best_stage_1_params)
+            model_to_save = final_model
+            save_input_dim = X_train_final.shape[1]
+            save_training_summary = final_training_summary
+        else:
+            logger.info("Test evaluation disabled for this run")
+
+        if config["output"].get("save_model", False):
+            save_model(model=model_to_save, config=best_config, logger=logger, input_dim=save_input_dim,
+                       feature_columns=preprocessing_artifacts.get("feature_columns"), model_params=best_stage_1_params,
+                       threshold=best_threshold, training_summary=save_training_summary,
+                       preprocessing_artifacts=preprocessing_artifacts)
     else:
         logger.info("Standard run mode")
 
@@ -1168,6 +1188,7 @@ def main() -> None:
         train_loader = create_dataloader(X_train, y_train, batch_size=batch_size, shuffle=True)
 
         val_loader = create_dataloader(X_val, y_val, batch_size=batch_size, shuffle=False)
+        test_loader = create_dataloader(X_test, y_test, batch_size=batch_size, shuffle=False)
 
         model = build_model(input_dim=X_train.shape[1], config=config, overrides={}, logger=logger)
 
@@ -1187,6 +1208,12 @@ def main() -> None:
 
         evaluate_and_save_split(model=model, data_loader=val_loader, split_name="Validation", threshold=threshold, device=device,
                                 config=config, logger=logger, training_summary=training_summary, history_df=history_df)
+
+        if evaluate_test:
+            evaluate_and_save_split(model=model, data_loader=test_loader, split_name="Test", threshold=threshold, device=device,
+                                    config=config, logger=logger, training_summary=training_summary, history_df=None)
+        else:
+            logger.info("Test evaluation disabled for this run")
 
     #winsound.Beep(2500,1000)
 
