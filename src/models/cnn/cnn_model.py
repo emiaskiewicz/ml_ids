@@ -1200,6 +1200,7 @@ def main() -> None:
 
     stage_1_enabled = config.get("tuning_stage_1", {}).get("enabled", False)
     stage_2_enabled = config.get("tuning_stage_2", {}).get("enabled", False)
+    evaluate_test = config["output"].get("evaluate_test", False)
 
     if stage_2_enabled and not stage_1_enabled:
         logger.critical("Tuning stage 2 cannot be enabled without tuning stage 1")
@@ -1208,7 +1209,7 @@ def main() -> None:
     if stage_1_enabled:
         logger.info("Tuning mode enabled")
 
-        best_stage_1_params, _, stage_1_results_df, best_history_df, best_training_summary = tuning_stage_1(
+        best_stage_1_params, best_model, stage_1_results_df, best_history_df, best_training_summary = tuning_stage_1(
             X_train=X_train, y_train=y_train, X_val=X_val, y_val=y_val, config=config, device=device, logger=logger)
 
         if config["output"]["save_tuning_results"]:
@@ -1222,40 +1223,38 @@ def main() -> None:
         best_config = copy.deepcopy(config)
         best_config["model"].update(best_stage_1_params)
 
-        logger.info("Preparing final train+val dataset for retraining")
-        X_train_final = pd.concat([X_train, X_val], axis=0)
-        y_train_final = pd.concat([y_train, y_val], axis=0)
-        logger.info(f"Final train+val shapes: X={X_train_final.shape}, y={y_train_final.shape}")
-
         batch_size = best_config["model"]["batch_size"]
-        train_final_loader = create_dataloader(X_train_final, y_train_final, batch_size=batch_size, shuffle=True)
+        val_loader = create_dataloader(X_val, y_val, batch_size=batch_size, shuffle=False)
         test_loader = create_dataloader(X_test, y_test, batch_size=batch_size, shuffle=False)
 
-        final_model = build_model(input_dim=X_train_final.shape[1], config=best_config, overrides={}, logger=logger)
-        best_epoch = int(best_training_summary["best_epoch"])
-
-        final_model, final_loss_info = train_final_model(model=final_model, train_loader=train_final_loader, y_train_final=y_train_final,
-                                                         config=best_config, device=device, logger=logger, fixed_epochs=best_epoch)
-
-        best_training_summary.update(final_loss_info)
         best_threshold = best_config["model"].get("decision_threshold", 0.5)
 
         if stage_2_enabled:
-            logger.info("Tuning stage 2 is enabled")
-            val_final_loader = create_dataloader(X_train_final, y_train_final, batch_size=batch_size, shuffle=False)
+            logger.info("Tuning stage 2 enabled for best stage 1 model")
 
-            best_stage_2_params, _ = tuning_stage_2(model=final_model, val_loader=val_final_loader,
-                config=config, device=device, logger=logger)
+            best_stage_2_params, stage_2_results_df = tuning_stage_2(model=best_model, val_loader=val_loader,
+                config=best_config, device=device, logger=logger)
 
             best_threshold = best_stage_2_params["decision_threshold"]
 
-        evaluate_and_save_split(model=final_model, data_loader=test_loader, split_name="Test", threshold=best_threshold,
-                                device=device, config=config, logger=logger, training_summary=best_training_summary,
-                                history_df=best_history_df, model_params=best_stage_1_params)
-        
+            if config["output"]["save_tuning_results"]:
+                save_stage_results(results_df=stage_2_results_df, best_params=best_stage_2_params,
+                    output_dir=config["output"]["output_dir"], stage="2", logger=logger)
+
         if config["output"].get("save_model", False):
-            save_model(model=final_model, config=best_config, logger=logger, input_dim=X_train_final.shape[1], feature_columns=X_train_final.columns.tolist(),
+            save_model(model=best_model, config=best_config, logger=logger, input_dim=X_train.shape[1], feature_columns=X_train.columns.tolist(),
                 model_params=best_stage_1_params, threshold=best_threshold, training_summary=best_training_summary)
+
+        evaluate_and_save_split(model=best_model, data_loader=val_loader, split_name="Validation", threshold=best_threshold,
+            device=device, config=best_config, logger=logger, training_summary=best_training_summary,
+            history_df=best_history_df, model_params=best_stage_1_params)
+
+        if evaluate_test:
+            evaluate_and_save_split(model=best_model, data_loader=test_loader, split_name="Test", threshold=best_threshold,
+                device=device, config=best_config, logger=logger, training_summary=best_training_summary, history_df=None,
+                model_params=best_stage_1_params)
+        else:
+            logger.info("Test evaluation disabled for this run")
 
     else:
         logger.info("Standard run mode")
@@ -1264,6 +1263,7 @@ def main() -> None:
         train_loader = create_dataloader(X_train, y_train, batch_size=batch_size, shuffle=True)
 
         val_loader = create_dataloader(X_val, y_val, batch_size=batch_size, shuffle=False)
+        test_loader = create_dataloader(X_test, y_test, batch_size=batch_size, shuffle=False)
 
         model = build_model(input_dim=X_train.shape[1], config=config, overrides={}, logger=logger)
 
@@ -1276,8 +1276,18 @@ def main() -> None:
 
         threshold = config["model"].get("decision_threshold", 0.5)
 
+        if config["output"].get("save_model", False):
+            save_model(model=model, config=config, logger=logger, input_dim=X_train.shape[1], feature_columns=X_train.columns.tolist(),
+                threshold=threshold, training_summary=training_summary)
+
         evaluate_and_save_split(model=model, data_loader=val_loader, split_name="Validation", threshold=threshold, device=device,
                                 config=config, logger=logger, training_summary=training_summary, history_df=history_df)
+
+        if evaluate_test:
+            evaluate_and_save_split(model=model, data_loader=test_loader, split_name="Test", threshold=threshold,
+                device=device, config=config, logger=logger, training_summary=training_summary, history_df=None)
+        else:
+            logger.info("Test evaluation disabled for this run")
 
 if __name__ == "__main__":
     main()
