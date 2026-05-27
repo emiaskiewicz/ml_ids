@@ -290,6 +290,23 @@ def save_visualizations(metrics: dict, config: dict, logger: logging.Logger) -> 
     plot_roc_curve(metrics, config, logger)
     plot_precision_recall_curve(metrics, config, logger)
 
+def evaluate_and_save_split(model, X, y, split_name: str, threshold: float, config: dict, logger: logging.Logger,
+                            model_params: dict | None = None) -> dict:
+    metrics = evaluate_model(model, X, y, split_name, threshold, logger)
+
+    summary_row = build_results_summary_row(metrics, config, model_params)
+    summary_csv_path = BASE_DIR / config["output"]["summary_path"]
+    append_results_to_csv(summary_row, summary_csv_path)
+    logger.info(f"Added {split_name} results to summary CSV: {summary_csv_path}")
+
+    if config["output"]["save_metrics"]:
+        save_metrics(metrics, config, logger)
+
+    if config["output"].get("save_plots", False):
+        save_visualizations(metrics, config, logger)
+
+    return metrics
+
 def save_model(model: LinearSVC, config: dict, logger: logging.Logger, preprocessing_artifacts: dict,
                decision_threshold: float, model_params: dict | None = None) -> None:
     model_config = config["model"].copy()
@@ -542,43 +559,43 @@ def main() -> None:
 
     stage_1_enabled = config.get("tuning_stage_1", {}).get("enabled", False)
     stage_2_enabled = config.get("tuning_stage_2", {}).get("enabled", False)
+    evaluate_test = config["output"].get("evaluate_test", False)
 
     if stage_1_enabled:
         logger.info("Tuning mode enabled")
 
         best_stage_1_params, best_stage_1_model, stage_1_results_df = tuning_stage_1(X_train, y_train, X_val, y_val, config, logger)
         save_stage_results(stage_1_results_df, best_stage_1_params, config["output"]["output_dir"], "1", logger)
-        plot_tuning_stage_1(stage_1_results_df, config, logger)
+        if config["output"].get("save_plots", False):
+            plot_tuning_stage_1(stage_1_results_df, config, logger)
         best_threshold = config["model"].get("decision_threshold", 0.5)
 
         if stage_2_enabled:
             best_stage_2_params, stage_2_results_df = tuning_stage_2(best_stage_1_model, X_val, y_val, config,logger)
             save_stage_results(stage_2_results_df, best_stage_2_params, config["output"]["output_dir"], "2",logger)
-            plot_tuning_stage_2(stage_2_results_df, config, logger)
+            if config["output"].get("save_plots", False):
+                plot_tuning_stage_2(stage_2_results_df, config, logger)
             best_threshold = best_stage_2_params["decision_threshold"]
 
-        logger.info("Preparing final train+val dataset")
-        X_train_final = pd.concat([X_train, X_val], axis=0)
-        y_train_final = pd.concat([y_train, y_val], axis=0)
+        evaluate_and_save_split(best_stage_1_model, X_val, y_val, "Validation", best_threshold, config, logger,
+                                best_stage_1_params)
 
-        logger.info(f"Final train+val shapes: X={X_train_final.shape}, y={y_train_final.shape}")
+        if evaluate_test:
+            logger.info("Preparing final train+val dataset")
+            X_train_final = pd.concat([X_train, X_val], axis=0)
+            y_train_final = pd.concat([y_train, y_val], axis=0)
 
-        final_model = build_model(config, best_stage_1_params, logger)
-        final_model = train_model(final_model, X_train_final, y_train_final, logger)
-        save_model(final_model, config, logger, preprocessing_artifacts, best_threshold, best_stage_1_params)
+            logger.info(f"Final train+val shapes: X={X_train_final.shape}, y={y_train_final.shape}")
 
-        test_metrics = evaluate_model(final_model,X_test,y_test,"Test", best_threshold, logger)
+            final_model = build_model(config, best_stage_1_params, logger)
+            final_model = train_model(final_model, X_train_final, y_train_final, logger)
+            save_model(final_model, config, logger, preprocessing_artifacts, best_threshold, best_stage_1_params)
 
-        summary_row = build_results_summary_row(metrics=test_metrics, config=config, model_params=best_stage_1_params)
-        summary_csv_path = BASE_DIR / config["output"]["summary_path"]
-        append_results_to_csv(summary_row, summary_csv_path)
-        logger.info(f"Added experiment results to summary CSV: {summary_csv_path}")
-
-        if config["output"]["save_metrics"]:
-            save_metrics(test_metrics, config, logger)
-
-        if config["output"]["save_plots"]:
-            save_visualizations(test_metrics, config, logger)
+            evaluate_and_save_split(final_model, X_test, y_test, "Test", best_threshold, config, logger,
+                                    best_stage_1_params)
+        else:
+            save_model(best_stage_1_model, config, logger, preprocessing_artifacts, best_threshold, best_stage_1_params)
+            logger.info("Test evaluation disabled for this run")
 
     else:
         logger.info("Standard run mode")
@@ -588,18 +605,12 @@ def main() -> None:
 
         threshold = config["model"].get("decision_threshold", 0.0)
         save_model(model, config, logger, preprocessing_artifacts, threshold)
-        val_metrics = evaluate_model(model, X_val, y_val, "Validation", threshold, logger)
+        evaluate_and_save_split(model, X_val, y_val, "Validation", threshold, config, logger, config["model"])
 
-        summary_row = build_results_summary_row(metrics=val_metrics, config=config, model_params=config["model"])
-        summary_csv_path = BASE_DIR / config["output"]["summary_path"]
-        append_results_to_csv(summary_row, summary_csv_path)
-        logger.info(f"Added experiment results to summary CSV: {summary_csv_path}")
-
-        if config["output"]["save_metrics"]:
-            save_metrics(val_metrics, config, logger)
-
-        if config["output"]["save_plots"]:
-            save_visualizations(val_metrics, config, logger)
+        if evaluate_test:
+            evaluate_and_save_split(model, X_test, y_test, "Test", threshold, config, logger, config["model"])
+        else:
+            logger.info("Test evaluation disabled for this run")
 
     winsound.Beep(2500,1000)
     #subprocess.run(["paplay", "/usr/share/sounds/freedesktop/stereo/complete.oga"], check=False)
