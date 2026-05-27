@@ -54,6 +54,7 @@ def apply_experiment_settings(config: dict, exp: dict) -> dict:
     config["tuning_stage_2"]["enabled"] = exp["stage_2"]
 
     config["output"]["save_plots"] = SAVE_PLOTS
+    config["output"]["evaluate_test"] = EVALUATE_TEST
     config["output"]["output_dir"] = f"outputs/logistic_regression/{DATASET_VARIANT}/{exp_id}"
     config["output"]["summary_path"] = f"outputs/logistic_regression/{DATASET_VARIANT}/lr_{DATASET_VARIANT}_results_sum.csv"
     config["logging"]["log_path"] = f"logs/logistic_regression/{DATASET_VARIANT}/{exp_id}.log"
@@ -62,7 +63,7 @@ def apply_experiment_settings(config: dict, exp: dict) -> dict:
 
 def experiment_finished(config: dict) -> bool:
     output_dir = PROJECT_DIR / config["output"]["output_dir"]
-    if config.get("tuning_stage_1", {}).get("enabled", False):
+    if EVALUATE_TEST:
         return (output_dir / "test_metrics.json").exists()
 
     return (output_dir / "validation_metrics.json").exists()
