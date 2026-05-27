@@ -60,6 +60,7 @@ output:
   save_model: false
   save_tuning_results: true
   save_best_config: true
+  evaluate_test: false
 
 logging:
   log_path: "logs/decision_tree/hard/DT-01h-tune.log"

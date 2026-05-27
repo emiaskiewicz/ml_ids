@@ -78,9 +78,11 @@ output:
   summary_path: "outputs/mlp/hard/mlp_h_results_sum.csv"
   save_metrics: true
   save_plots: true
+  save_model: false
   save_predictions: true
   save_tuning_results: true
   save_best_config: true
+  evaluate_test: false
 
 logging:
   log_path: "logs/mlp/hard/MLP-04h-tune.log"

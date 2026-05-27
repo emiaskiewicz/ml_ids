@@ -52,12 +52,14 @@ tuning_stage_2:
 
 output:
   output_dir: "outputs/logistic_regression/hard/LR-015-tune"
+  summary_path: "outputs/logistic_regression/hard/lr_h_results_sum.csv"
   save_metrics: true
   save_plots: true
   save_predictions: false
   save_model: false
   save_tuning_results: true
   save_best_config: true
+  evaluate_test: false
 
 logging:
   log_path: "logs/logistic_regression/hard/LR-015-tune.log"
