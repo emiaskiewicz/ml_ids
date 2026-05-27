@@ -18,6 +18,7 @@ import copy
 from itertools import product
 import numpy as np
 import os
+from utils.save_model import save_torch_model
 
 BASE_DIR = Path(__file__).resolve().parents[3]
 CONFIG_PATH = BASE_DIR / "config" / "cnn.yaml"
@@ -1155,37 +1156,35 @@ def train_final_model(model: nn.Module, train_loader: DataLoader, y_train_final:
     return model, loss_info
 
 def save_model(model: nn.Module, config: dict, logger: logging.Logger, input_dim: int, feature_columns: list[str] | None = None,
-               model_params: dict | None = None, threshold: float | None = None, training_summary: dict | None = None) -> None:
-    output_dir = BASE_DIR / config["output"]["output_dir"]
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    save_path = output_dir / "model.pt"
+               model_params: dict | None = None, threshold: float | None = None, training_summary: dict | None = None,
+               preprocessing_artifacts: dict | None = None) -> None:
     model_config = config["model"].copy()
 
     if model_params is not None:
         model_config.update(model_params)
 
-    checkpoint = {
-        "experiment": config["experiment"]["name"],
-        "dataset_variant": config["data"]["dataset_variant"],
-        "model_type": "cnn",
-        "model_class": model.__class__.__name__,
-        "input_dim": input_dim,
-        "input_shape": [1, input_dim],
-        "feature_columns": feature_columns,
-        "model_config": model_config,
-        "decision_threshold": threshold,
-        "training_summary": training_summary,
-        "state_dict": {
-            key: value.detach().cpu()
-            for key, value in model.state_dict().items()
+    save_torch_model(
+        model=model,
+        output_dir=BASE_DIR / config["output"]["output_dir"],
+        config=config,
+        logger=logger,
+        input_dim=input_dim,
+        selected_features=preprocessing_artifacts.get("selected_features") if preprocessing_artifacts else None,
+        decision_threshold=threshold,
+        scaler=preprocessing_artifacts.get("scaler") if preprocessing_artifacts else None,
+        selector=preprocessing_artifacts.get("selector") if preprocessing_artifacts else None,
+        feature_columns=feature_columns,
+        model_config=model_config,
+        training_summary=training_summary,
+        preprocessing_artifacts=preprocessing_artifacts,
+        extra_artifacts={
+            "experiment": config["experiment"]["name"],
+            "dataset_variant": config["data"]["dataset_variant"],
+            "model_type": "cnn",
+            "model_class": model.__class__.__name__,
+            "input_shape": [1, input_dim],
         },
-        "full_config": config
-    }
-
-    torch.save(checkpoint, save_path)
-
-    logger.info(f"Saved CNN model checkpoint to: {save_path}")
+    )
 
 def main() -> None:
     config = load_config(CONFIG_PATH)
@@ -1195,7 +1194,7 @@ def main() -> None:
     logger.info("Start experiment")
     set_seed(config["experiment"]["random_state"], logger)
     device = get_device(config, logger)
-    X_train, X_val, X_test, y_train, y_val, y_test = prepare_cnn_data(config)
+    X_train, X_val, X_test, y_train, y_val, y_test, preprocessing_artifacts = prepare_cnn_data(config)
     logger.info("Data prepared successfully")
 
     stage_1_enabled = config.get("tuning_stage_1", {}).get("enabled", False)
@@ -1243,7 +1242,8 @@ def main() -> None:
 
         if config["output"].get("save_model", False):
             save_model(model=best_model, config=best_config, logger=logger, input_dim=X_train.shape[1], feature_columns=X_train.columns.tolist(),
-                model_params=best_stage_1_params, threshold=best_threshold, training_summary=best_training_summary)
+                model_params=best_stage_1_params, threshold=best_threshold, training_summary=best_training_summary,
+                preprocessing_artifacts=preprocessing_artifacts)
 
         evaluate_and_save_split(model=best_model, data_loader=val_loader, split_name="Validation", threshold=best_threshold,
             device=device, config=best_config, logger=logger, training_summary=best_training_summary,
@@ -1278,7 +1278,7 @@ def main() -> None:
 
         if config["output"].get("save_model", False):
             save_model(model=model, config=config, logger=logger, input_dim=X_train.shape[1], feature_columns=X_train.columns.tolist(),
-                threshold=threshold, training_summary=training_summary)
+                threshold=threshold, training_summary=training_summary, preprocessing_artifacts=preprocessing_artifacts)
 
         evaluate_and_save_split(model=model, data_loader=val_loader, split_name="Validation", threshold=threshold, device=device,
                                 config=config, logger=logger, training_summary=training_summary, history_df=history_df)

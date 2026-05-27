@@ -14,6 +14,8 @@ import json
 import os
 import pandas as pd
 from itertools import product
+import copy
+from utils.save_model import save_sklearn_model
 
 os.environ["LOKY_MAX_CPU_COUNT"] = "8"
 
@@ -288,8 +290,30 @@ def save_visualizations(metrics: dict, config: dict, logger: logging.Logger) -> 
     plot_roc_curve(metrics, config, logger)
     plot_precision_recall_curve(metrics, config, logger)
 
-def save_model(config: dict, logger: logging.Logger) -> dict:
-    pass
+def save_model(model: LinearSVC, config: dict, logger: logging.Logger, preprocessing_artifacts: dict,
+               decision_threshold: float, model_params: dict | None = None) -> None:
+    model_config = config["model"].copy()
+    if model_params is not None:
+        model_config.update(model_params)
+    artifact_config = copy.deepcopy(config)
+    artifact_config["model"].update(model_config)
+
+    save_sklearn_model(
+        model=model,
+        output_dir=BASE_DIR / config["output"]["output_dir"],
+        config=artifact_config,
+        logger=logger,
+        scaler=preprocessing_artifacts.get("scaler"),
+        selector=preprocessing_artifacts.get("selector"),
+        selected_features=preprocessing_artifacts.get("selected_features") or preprocessing_artifacts.get("feature_columns"),
+        decision_threshold=decision_threshold,
+        extra_artifacts={
+            "model_type": "svm",
+            "model_config": model_config,
+            "feature_columns": preprocessing_artifacts.get("feature_columns"),
+            "preprocessing_artifacts": preprocessing_artifacts,
+        },
+    )
 
 def apply_threshold(y_score: pd.Series | list, threshold: float) -> list:
     return [1 if prob >= threshold else 0 for prob in y_score]
@@ -513,7 +537,7 @@ def main() -> None:
     log_config(config, logger)
 
     logger.info("Start experiment")
-    X_train, X_val, X_test, y_train, y_val, y_test = prepare_svm_data(config)
+    X_train, X_val, X_test, y_train, y_val, y_test, preprocessing_artifacts = prepare_svm_data(config)
     logger.info("Data prepared successfully")
 
     stage_1_enabled = config.get("tuning_stage_1", {}).get("enabled", False)
@@ -541,6 +565,7 @@ def main() -> None:
 
         final_model = build_model(config, best_stage_1_params, logger)
         final_model = train_model(final_model, X_train_final, y_train_final, logger)
+        save_model(final_model, config, logger, preprocessing_artifacts, best_threshold, best_stage_1_params)
 
         test_metrics = evaluate_model(final_model,X_test,y_test,"Test", best_threshold, logger)
 
@@ -562,6 +587,7 @@ def main() -> None:
         model = train_model(model, X_train, y_train, logger)
 
         threshold = config["model"].get("decision_threshold", 0.0)
+        save_model(model, config, logger, preprocessing_artifacts, threshold)
         val_metrics = evaluate_model(model, X_val, y_val, "Validation", threshold, logger)
 
         summary_row = build_results_summary_row(metrics=val_metrics, config=config, model_params=config["model"])

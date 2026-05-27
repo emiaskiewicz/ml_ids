@@ -18,6 +18,7 @@ import copy
 from itertools import product
 import numpy as np
 import os
+from utils.save_model import save_torch_model
 
 BASE_DIR = Path(__file__).resolve().parents[3]
 CONFIG_PATH = BASE_DIR / "config" / "autoencoder.yaml"
@@ -1147,10 +1148,7 @@ def save_predictions(metrics: dict, config: dict, logger: logging.Logger) -> Non
     logger.info(f"Saved {metrics['split_name']} predictions to: {save_path}")
 
 def save_model(model: nn.Module, config: dict, logger: logging.Logger, model_params: dict | None = None, threshold: float | None = None,
-               training_summary: dict | None = None) -> None:
-    output_dir = BASE_DIR / config["output"]["output_dir"]
-    output_dir.mkdir(parents=True, exist_ok=True)
-    save_path = output_dir / "model.pt"
+               training_summary: dict | None = None, preprocessing_artifacts: dict | None = None) -> None:
     model_config = config["model"].copy()
 
     if model_params is not None:
@@ -1159,22 +1157,28 @@ def save_model(model: nn.Module, config: dict, logger: logging.Logger, model_par
     first_encoder_layer = model.encoder[0]
     input_dim = first_encoder_layer.in_features if isinstance(first_encoder_layer, nn.Linear) else None
 
-    checkpoint = {
-        "experiment": config["experiment"]["name"],
-        "dataset_variant": config["data"]["dataset_variant"],
-        "model_type": "autoencoder",
-        "model_class": model.__class__.__name__,
-        "input_dim": input_dim,
-        "model_config": model_config,
-        "reconstruction_threshold": threshold,
-        "training_summary": training_summary,
-        "state_dict": model.state_dict(),
-        "full_config": config
-    }
-
-    torch.save(checkpoint, save_path)
-
-    logger.info(f"Saved autoencoder model checkpoint to: {save_path}")
+    save_torch_model(
+        model=model,
+        output_dir=BASE_DIR / config["output"]["output_dir"],
+        config=config,
+        logger=logger,
+        input_dim=input_dim,
+        selected_features=preprocessing_artifacts.get("selected_features") if preprocessing_artifacts else None,
+        decision_threshold=threshold,
+        scaler=preprocessing_artifacts.get("scaler") if preprocessing_artifacts else None,
+        selector=preprocessing_artifacts.get("selector") if preprocessing_artifacts else None,
+        feature_columns=preprocessing_artifacts.get("feature_columns") if preprocessing_artifacts else None,
+        model_config=model_config,
+        training_summary=training_summary,
+        preprocessing_artifacts=preprocessing_artifacts,
+        threshold_key="reconstruction_threshold",
+        extra_artifacts={
+            "experiment": config["experiment"]["name"],
+            "dataset_variant": config["data"]["dataset_variant"],
+            "model_type": "autoencoder",
+            "model_class": model.__class__.__name__,
+        },
+    )
 
 def main() -> None:
     config = load_config(CONFIG_PATH)
@@ -1185,7 +1189,7 @@ def main() -> None:
     set_seed(config["experiment"]["random_state"], logger)
     device = get_device(config, logger)
 
-    X_train_normal, X_val, X_test, y_train_normal, y_val, y_test = prepare_ae_data(config)
+    X_train_normal, X_val, X_test, y_train_normal, y_val, y_test, preprocessing_artifacts = prepare_ae_data(config)
     logger.info("Data prepared successfully")
 
     normal_label = config["data"]["normal_label"]
@@ -1244,7 +1248,8 @@ def main() -> None:
 
         if config["output"]["save_model"]:
             save_model(model=best_model, config=best_config, logger=logger, model_params=best_stage_1_params,
-                       threshold=final_threshold, training_summary=best_training_summary)
+                       threshold=final_threshold, training_summary=best_training_summary,
+                       preprocessing_artifacts=preprocessing_artifacts)
 
         evaluate_and_save_split(model=best_model, data_loader=val_labeled_loader, split_name="Validation",
             threshold=final_threshold, device=device, config=best_config, logger=logger,
@@ -1279,7 +1284,7 @@ def main() -> None:
 
         if config["output"]["save_model"]:
             save_model(model=model, config=config, logger=logger, threshold=threshold,
-                training_summary=training_summary)
+                       training_summary=training_summary, preprocessing_artifacts=preprocessing_artifacts)
 
         evaluate_and_save_split(model=model, data_loader=val_labeled_loader, split_name="Validation",
             threshold=threshold, device=device, config=config, logger=logger, training_summary=training_summary,

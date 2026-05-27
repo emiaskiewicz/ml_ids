@@ -19,6 +19,7 @@ import copy
 from itertools import product
 import numpy as np
 import os
+from utils.save_model import save_torch_model
 
 BASE_DIR = Path(__file__).resolve().parents[3]
 CONFIG_PATH = BASE_DIR / "config" / "mlp.yaml"
@@ -1059,6 +1060,36 @@ def train_final_model(model: nn.Module, train_loader: DataLoader, y_train_final:
 
     return model, loss_info
 
+def save_model(model: nn.Module, config: dict, logger: logging.Logger, input_dim: int, feature_columns: list[str] | None = None,
+               model_params: dict | None = None, threshold: float | None = None, training_summary: dict | None = None,
+               preprocessing_artifacts: dict | None = None) -> None:
+    model_config = config["model"].copy()
+
+    if model_params is not None:
+        model_config.update(model_params)
+
+    save_torch_model(
+        model=model,
+        output_dir=BASE_DIR / config["output"]["output_dir"],
+        config=config,
+        logger=logger,
+        input_dim=input_dim,
+        selected_features=preprocessing_artifacts.get("selected_features") if preprocessing_artifacts else None,
+        decision_threshold=threshold,
+        scaler=preprocessing_artifacts.get("scaler") if preprocessing_artifacts else None,
+        selector=preprocessing_artifacts.get("selector") if preprocessing_artifacts else None,
+        feature_columns=feature_columns,
+        model_config=model_config,
+        training_summary=training_summary,
+        preprocessing_artifacts=preprocessing_artifacts,
+        extra_artifacts={
+            "experiment": config["experiment"]["name"],
+            "dataset_variant": config["data"]["dataset_variant"],
+            "model_type": "mlp",
+            "model_class": model.__class__.__name__,
+        },
+    )
+
 def main() -> None:
     config = load_config(CONFIG_PATH)
     logger = get_logger(config)
@@ -1067,7 +1098,7 @@ def main() -> None:
     logger.info("Start experiment")
     set_seed(config["experiment"]["random_state"], logger)
     device = get_device(config, logger)
-    X_train, X_val, X_test, y_train, y_val, y_test = prepare_mlp_data(config)
+    X_train, X_val, X_test, y_train, y_val, y_test, preprocessing_artifacts = prepare_mlp_data(config)
     logger.info("Data prepared successfully")
 
     stage_1_enabled = config.get("tuning_stage_1", {}).get("enabled", False)
@@ -1121,6 +1152,12 @@ def main() -> None:
 
             best_threshold = best_stage_2_params["decision_threshold"]
 
+        if config["output"].get("save_model", False):
+            save_model(model=final_model, config=best_config, logger=logger, input_dim=X_train_final.shape[1],
+                       feature_columns=preprocessing_artifacts.get("feature_columns"), model_params=best_stage_1_params,
+                       threshold=best_threshold, training_summary=best_training_summary,
+                       preprocessing_artifacts=preprocessing_artifacts)
+
         evaluate_and_save_split(model=final_model, data_loader=test_loader, split_name="Test", threshold=best_threshold,
                                 device=device, config=config, logger=logger, training_summary=best_training_summary,
                                 history_df=best_history_df, model_params=best_stage_1_params)
@@ -1142,6 +1179,11 @@ def main() -> None:
         save_training_history(history_df, config, logger)
 
         threshold = config["model"].get("decision_threshold", 0.5)
+
+        if config["output"].get("save_model", False):
+            save_model(model=model, config=config, logger=logger, input_dim=X_train.shape[1],
+                       feature_columns=preprocessing_artifacts.get("feature_columns"), threshold=threshold,
+                       training_summary=training_summary, preprocessing_artifacts=preprocessing_artifacts)
 
         evaluate_and_save_split(model=model, data_loader=val_loader, split_name="Validation", threshold=threshold, device=device,
                                 config=config, logger=logger, training_summary=training_summary, history_df=history_df)
