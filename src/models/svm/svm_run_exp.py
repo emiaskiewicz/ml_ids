@@ -18,6 +18,20 @@ EVALUATE_TEST = False
 experiments = [
     {"id": "SVM-01e", "scaling": True, "correlation": False, "feature_selection": False,
      "smote": False, "stage_1": False, "stage_2": False},
+    {"id": "SVM-02e", "scaling": True, "correlation": True, "feature_selection": False,
+     "smote": False, "stage_1": False, "stage_2": False},
+    {"id": "SVM-03e", "scaling": True, "correlation": False, "feature_selection": True,
+     "smote": False, "stage_1": False, "stage_2": False},
+    {"id": "SVM-04e", "scaling": True, "correlation": True, "feature_selection": True,
+     "smote": False, "stage_1": False, "stage_2": False},
+    {"id": "SVM-05e", "scaling": True, "correlation": False, "feature_selection": False,
+     "smote": True, "stage_1": False, "stage_2": False},
+    {"id": "SVM-06e", "scaling": True, "correlation": True, "feature_selection": False,
+     "smote": True, "stage_1": False, "stage_2": False},
+    {"id": "SVM-07e", "scaling": True, "correlation": False, "feature_selection": True,
+     "smote": True, "stage_1": False, "stage_2": False},
+    {"id": "SVM-08e", "scaling": True, "correlation": True, "feature_selection": True,
+     "smote": True, "stage_1": False, "stage_2": False},
 ]
 
 def format_duration(seconds: float) -> str:

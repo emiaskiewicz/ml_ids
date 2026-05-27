@@ -18,6 +18,20 @@ EVALUATE_TEST = False
 experiments = [
     {"id": "DT-01e", "correlation": False, "feature_selection": False,
      "smote": False, "stage_1": False, "stage_2": False},
+    {"id": "DT-02e", "correlation": True, "feature_selection": False,
+     "smote": False, "stage_1": False, "stage_2": False},
+    {"id": "DT-03e", "correlation": False, "feature_selection": True,
+     "smote": False, "stage_1": False, "stage_2": False},
+    {"id": "DT-04e", "correlation": True, "feature_selection": True,
+     "smote": False, "stage_1": False, "stage_2": False},
+    {"id": "DT-05e", "correlation": False, "feature_selection": False,
+     "smote": True, "stage_1": False, "stage_2": False},
+    {"id": "DT-06e", "correlation": True, "feature_selection": False,
+     "smote": True, "stage_1": False, "stage_2": False},
+    {"id": "DT-07e", "correlation": False, "feature_selection": True,
+     "smote": True, "stage_1": False, "stage_2": False},
+    {"id": "DT-08e", "correlation": True, "feature_selection": True,
+     "smote": True, "stage_1": False, "stage_2": False},
 ]
 
 def format_duration(seconds: float) -> str:
