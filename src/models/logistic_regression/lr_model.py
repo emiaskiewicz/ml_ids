@@ -277,6 +277,23 @@ def save_visualizations(metrics: dict, config: dict, logger: logging.Logger) -> 
     plot_roc_curve(metrics, config, logger)
     plot_precision_recall_curve(metrics, config, logger)
 
+def evaluate_and_save_split(model, X, y, split_name: str, threshold: float, config: dict, logger: logging.Logger,
+                            model_params: dict | None = None) -> dict:
+    metrics = evaluate_model(model, X, y, split_name, threshold, logger)
+
+    summary_row = build_results_summary_row(metrics, config, model_params)
+    summary_csv_path = BASE_DIR / config["output"]["summary_path"]
+    append_results_to_csv(summary_row, summary_csv_path)
+    logger.info(f"Added {split_name} results to summary CSV: {summary_csv_path}")
+
+    if config["output"]["save_metrics"]:
+        save_metrics(metrics, config, logger)
+
+    if config["output"]["save_plots"]:
+        save_visualizations(metrics, config, logger)
+
+    return metrics
+
 def save_model(config: dict, logger: logging.Logger) -> dict:
     pass
 
@@ -507,6 +524,7 @@ def main() -> None:
 
     stage_1_enabled = config.get("tuning_stage_1", {}).get("enabled", False)
     stage_2_enabled = config.get("tuning_stage_2", {}).get("enabled", False)
+    evaluate_test = config["output"].get("evaluate_test", False)
 
     if stage_1_enabled:
         logger.info("Tuning mode enabled")
@@ -522,31 +540,31 @@ def main() -> None:
             plot_tuning_stage_2(stage_2_results_df, config, logger)
             best_threshold = best_stage_2_params["decision_threshold"]
 
-        logger.info("Preparing final train+val dataset")
-        X_train_final = pd.concat([X_train, X_val], axis=0)
-        y_train_final = pd.concat([y_train, y_val], axis=0)
+        best_model_params = {
+            "C": best_stage_1_params["C"],
+            "class_weight": best_stage_1_params["class_weight"],
+        }
 
-        logger.info(f"Final train+val shapes: X={X_train_final.shape}, y={y_train_final.shape}")
+        evaluate_and_save_split(best_stage_1_model, X_val, y_val, "Validation", best_threshold, config, logger, best_model_params)
 
-        final_model = build_model(config,{
-                "C": best_stage_1_params["C"],
-                "class_weight": best_stage_1_params["class_weight"],
-            }, logger
-        )
+        if evaluate_test:
+            logger.info("Preparing final train+val dataset")
+            X_train_final = pd.concat([X_train, X_val], axis=0)
+            y_train_final = pd.concat([y_train, y_val], axis=0)
 
-        final_model = train_model(final_model, X_train_final, y_train_final, logger)
+            logger.info(f"Final train+val shapes: X={X_train_final.shape}, y={y_train_final.shape}")
 
-        test_metrics = evaluate_model(final_model,X_test,y_test,"Test", best_threshold, logger)
-        summary_row = build_results_summary_row(test_metrics, config,{"C": best_stage_1_params["C"], "class_weight": best_stage_1_params["class_weight"],})
-        summary_csv_path = BASE_DIR / config["output"]["summary_path"]
-        append_results_to_csv(summary_row, summary_csv_path)
-        logger.info(f"Added Test results to summary CSV: {summary_csv_path}")
+            final_model = build_model(config,{
+                    "C": best_stage_1_params["C"],
+                    "class_weight": best_stage_1_params["class_weight"],
+                }, logger
+            )
 
-        if config["output"]["save_metrics"]:
-            save_metrics(test_metrics, config, logger)
+            final_model = train_model(final_model, X_train_final, y_train_final, logger)
 
-        if config["output"]["save_plots"]:
-            save_visualizations(test_metrics, config, logger)
+            evaluate_and_save_split(final_model, X_test, y_test, "Test", best_threshold, config, logger, best_model_params)
+        else:
+            logger.info("Test evaluation disabled for this run")
 
     else:
         logger.info("Standard run mode")
@@ -554,17 +572,14 @@ def main() -> None:
 
         model = train_model(model, X_train, y_train, logger)
 
-        val_metrics = evaluate_model(model, X_val, y_val, "Validation", 0.5, logger)
-        summary_row = build_results_summary_row(val_metrics, config)
-        summary_csv_path = BASE_DIR / config["output"]["summary_path"]
-        append_results_to_csv(summary_row, summary_csv_path)
-        logger.info(f"Added Validation results to summary CSV: {summary_csv_path}")
+        threshold = config["model"].get("decision_threshold", 0.5)
 
-        if config["output"]["save_metrics"]:
-            save_metrics(val_metrics, config, logger)
+        evaluate_and_save_split(model, X_val, y_val, "Validation", threshold, config, logger)
 
-        if config["output"]["save_plots"]:
-            save_visualizations(val_metrics, config, logger)
+        if evaluate_test:
+            evaluate_and_save_split(model, X_test, y_test, "Test", threshold, config, logger)
+        else:
+            logger.info("Test evaluation disabled for this run")
 
     winsound.Beep(2500,1000)
 
