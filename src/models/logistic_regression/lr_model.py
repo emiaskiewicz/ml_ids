@@ -176,7 +176,6 @@ def build_results_summary_row(metrics: dict, config: dict, model_params: dict | 
     model_cfg.update(model_params)
 
     features_cfg = config["features"]
-    preprocessing_cfg = config["preprocessing"]
 
     return {
         "experiment": config["experiment"]["name"],
@@ -190,14 +189,14 @@ def build_results_summary_row(metrics: dict, config: dict, model_params: dict | 
         "average_precision": metrics["average_precision"],
         "threshold": metrics["threshold_used"],
 
-        "scaling": preprocessing_cfg["scaling"],
-        "scaler": preprocessing_cfg["scaler"],
+        "scaling": features_cfg["scaling"],
+        "scaler": features_cfg["scaler"],
         "feature_selection": features_cfg["use_feature_selection"],
         "feature_selection_method": features_cfg["feature_selection_method"],
         "selected_k_features": features_cfg["selected_k_features"],
         "remove_correlated_features": features_cfg["remove_correlated_features"],
         "correlation_threshold": features_cfg["correlation_threshold"],
-        "smote": preprocessing_cfg["smote"],
+        "smote": features_cfg["smote"],
 
         "max_iter": model_cfg["max_iter"],
         "solver": model_cfg["solver"],

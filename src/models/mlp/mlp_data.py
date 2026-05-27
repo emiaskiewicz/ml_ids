@@ -193,7 +193,6 @@ def prepare_mlp_data(config: dict):
     output_cfg = config["output"]
     features_cfg = config["features"]
     split_cfg = config["split"]
-    prep_cfg = config["preprocessing"]
 
     if split_cfg["load_existing_split"] and split_files_exist(config):
         logger.info(f"Loading existing split data")
@@ -226,9 +225,9 @@ def prepare_mlp_data(config: dict):
             corr_matrix_new = compute_correlation_matrix(X_train, logger)
             plot_correlation_matrix(corr_matrix_new, output_cfg["output_dir"], "corr_after_remove.jpg", logger)
 
-    if prep_cfg["scaling"]:
+    if features_cfg["scaling"]:
         logger.info("Scaling is enabled")
-        X_train, X_val, X_test, scaler = scale_datasets(X_train, X_val, X_test, prep_cfg["scaler"], logger)
+        X_train, X_val, X_test, scaler = scale_datasets(X_train, X_val, X_test, features_cfg["scaler"], logger)
         preprocessing_artifacts["scaler"] = scaler
     else:
         logger.info("Scaling is disabled")
@@ -244,7 +243,7 @@ def prepare_mlp_data(config: dict):
     else:
         logger.info("Feature selection is disabled")
 
-    if prep_cfg["smote"]:
+    if features_cfg["smote"]:
         logger.info("SMOTE is enabled")
         logger.info(f"Class distribution before SMOTE:\n{y_train.value_counts()}")
         X_train, y_train = apply_smote(X_train, y_train, exp_cfg["random_state"], logger)

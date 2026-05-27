@@ -75,10 +75,10 @@ def apply_experiment_settings(config: dict, exp: dict) -> dict:
     config["split"]["split_dir"] = f"data/split/{DATASET_VARIANT}/"
     config["split"]["load_existing_split"] = True
 
-    config["preprocessing"]["scaling"] = exp["scaling"]
+    config["features"]["scaling"] = exp["scaling"]
     config["features"]["remove_correlated_features"] = exp["correlation"]
     config["features"]["use_feature_selection"] = exp["feature_selection"]
-    config["preprocessing"]["smote"] = exp["smote"]
+    config["features"]["smote"] = exp["smote"]
 
     config["tuning_stage_1"]["enabled"] = exp["stage_1"]
     config["tuning_stage_2"]["enabled"] = exp["stage_2"]

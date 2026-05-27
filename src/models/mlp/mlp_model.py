@@ -212,7 +212,7 @@ def build_loss_function(y_train: pd.Series, config: dict, device, logger: loggin
         logger.info("Using BCEWithLogitsLoss without pos_weight")
         return nn.BCEWithLogitsLoss(), loss_info
 
-    if config["preprocessing"]["smote"]:
+    if config["features"].get("smote", False):
         logger.warning("SMOTE and pos_weight are both enabled.")
 
     pos_weight_mode = model_cfg.get("pos_weight_mode", "auto")
@@ -497,7 +497,6 @@ def build_results_summary_row(metrics: dict, config: dict, model_params: dict | 
     }
     training_cfg.update(training_summary)
     features_cfg = config["features"]
-    prep_cfg = config["preprocessing"]
 
     return {
         "experiment": config["experiment"]["name"],
@@ -511,13 +510,13 @@ def build_results_summary_row(metrics: dict, config: dict, model_params: dict | 
         "average_precision": metrics["average_precision"],
         "threshold": metrics["threshold_used"],
 
-        "scaling": prep_cfg.get("scaling", False),
-        "scaler": prep_cfg.get("scaler", None),
+        "scaling": features_cfg.get("scaling", False),
+        "scaler": features_cfg.get("scaler", None),
 
         "feature_selection": features_cfg.get("use_feature_selection", False),
         "feature_selection_method": features_cfg.get("feature_selection_method", None),
         "selected_k_features": features_cfg.get("selected_k_features", None),
-        "smote": prep_cfg.get("smote", False),
+        "smote": features_cfg.get("smote", False),
         "use_pos_weight": model_params["use_pos_weight"],
         "pos_weight_mode": model_params.get("pos_weight_mode", "auto"),
         "pos_weight_value": training_summary["pos_weight_value"],

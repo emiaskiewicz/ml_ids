@@ -177,7 +177,6 @@ def build_results_summary_row(metrics: dict, config: dict, model_params: dict | 
         model_params = config["model"]
 
     features_cfg = config["features"]
-    prep_cfg = config["preprocessing"]
     model_cfg = config["model"]
 
     return {
@@ -192,13 +191,13 @@ def build_results_summary_row(metrics: dict, config: dict, model_params: dict | 
         "average_precision": metrics["average_precision"],
         "threshold": metrics["threshold_used"],
 
-        "scaling": prep_cfg.get("scaling", False),
-        "scaler": prep_cfg.get("scaler", None),
+        "scaling": features_cfg.get("scaling", False),
+        "scaler": features_cfg.get("scaler", None),
 
         "feature_selection": features_cfg.get("use_feature_selection", False),
         "feature_selection_method": features_cfg.get("feature_selection_method", None),
         "selected_k_features": features_cfg.get("selected_k_features", None),
-        "smote": prep_cfg.get("smote", False),
+        "smote": features_cfg.get("smote", False),
 
         "C": model_params.get("C", model_cfg.get("C")),
         "loss": model_params.get("loss", model_cfg.get("loss")),
