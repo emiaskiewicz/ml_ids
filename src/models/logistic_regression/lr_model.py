@@ -11,11 +11,19 @@ import matplotlib.pyplot as plt
 import json
 import os
 import pandas as pd
+import csv
 
 os.environ["LOKY_MAX_CPU_COUNT"] = "8"
 
 BASE_DIR = Path(__file__).resolve().parents[3]
 CONFIG_PATH = BASE_DIR / "config" / "logistic_regression.yaml"
+
+RESULTS_COLUMNS = [
+    "experiment", "dataset_variant", "split", "accuracy", "precision", "recall", "f1", "roc_auc",
+    "average_precision", "threshold", "scaling", "scaler", "feature_selection", "feature_selection_method",
+    "selected_k_features", "remove_correlated_features", "correlation_threshold", "smote",
+    "max_iter", "solver", "class_weight", "C", "tuning_stage_1", "tuning_stage_2"
+]
 
 def load_config(config_path: Path) -> dict:
     with config_path.open("r", encoding="utf-8") as file:
@@ -142,6 +150,61 @@ def save_metrics(metrics: dict, config: dict, logger: logging.Logger) -> None:
 
     save_to_json(metrics, config["experiment"]["name"], json_path)
     logger.info(f"Saved metrics JSON to: {json_path}")
+
+def append_results_to_csv(results: dict, csv_path: Path) -> None:
+    csv_path.parent.mkdir(parents=True, exist_ok=True)
+
+    file_exists = csv_path.exists()
+    file_is_empty = file_exists and csv_path.stat().st_size == 0
+    row = {column: results.get(column, None) for column in RESULTS_COLUMNS}
+
+    with csv_path.open("a", newline="", encoding="utf-8") as file:
+        writer = csv.DictWriter(file, fieldnames=RESULTS_COLUMNS)
+
+        if not file_exists or file_is_empty:
+            writer.writeheader()
+
+        writer.writerow(row)
+
+def build_results_summary_row(metrics: dict, config: dict, model_params: dict | None = None) -> dict:
+    if model_params is None:
+        model_params = config["model"]
+
+    model_cfg = config["model"].copy()
+    model_cfg.update(model_params)
+
+    features_cfg = config["features"]
+    preprocessing_cfg = config["preprocessing"]
+
+    return {
+        "experiment": config["experiment"]["name"],
+        "dataset_variant": config["data"]["dataset_variant"],
+        "split": metrics["split_name"],
+        "accuracy": metrics["accuracy"],
+        "precision": metrics["precision"],
+        "recall": metrics["recall"],
+        "f1": metrics["f1"],
+        "roc_auc": metrics["roc_auc"],
+        "average_precision": metrics["average_precision"],
+        "threshold": metrics["threshold_used"],
+
+        "scaling": preprocessing_cfg["scaling"],
+        "scaler": preprocessing_cfg["scaler"],
+        "feature_selection": features_cfg["use_feature_selection"],
+        "feature_selection_method": features_cfg["feature_selection_method"],
+        "selected_k_features": features_cfg["selected_k_features"],
+        "remove_correlated_features": features_cfg["remove_correlated_features"],
+        "correlation_threshold": features_cfg["correlation_threshold"],
+        "smote": preprocessing_cfg["smote"],
+
+        "max_iter": model_cfg["max_iter"],
+        "solver": model_cfg["solver"],
+        "class_weight": model_cfg["class_weight"],
+        "C": model_cfg["C"],
+
+        "tuning_stage_1": config["tuning_stage_1"]["enabled"],
+        "tuning_stage_2": config["tuning_stage_2"]["enabled"],
+    }
 
 def plot_confusion_matrix(metrics: dict, config: dict, logger: logging.Logger) -> None:
     split_name = metrics["split_name"].lower()
@@ -474,6 +537,10 @@ def main() -> None:
         final_model = train_model(final_model, X_train_final, y_train_final, logger)
 
         test_metrics = evaluate_model(final_model,X_test,y_test,"Test", best_threshold, logger)
+        summary_row = build_results_summary_row(test_metrics, config,{"C": best_stage_1_params["C"], "class_weight": best_stage_1_params["class_weight"],})
+        summary_csv_path = BASE_DIR / config["output"]["summary_path"]
+        append_results_to_csv(summary_row, summary_csv_path)
+        logger.info(f"Added Test results to summary CSV: {summary_csv_path}")
 
         if config["output"]["save_metrics"]:
             save_metrics(test_metrics, config, logger)
@@ -488,6 +555,10 @@ def main() -> None:
         model = train_model(model, X_train, y_train, logger)
 
         val_metrics = evaluate_model(model, X_val, y_val, "Validation", 0.5, logger)
+        summary_row = build_results_summary_row(val_metrics, config)
+        summary_csv_path = BASE_DIR / config["output"]["summary_path"]
+        append_results_to_csv(summary_row, summary_csv_path)
+        logger.info(f"Added Validation results to summary CSV: {summary_csv_path}")
 
         if config["output"]["save_metrics"]:
             save_metrics(val_metrics, config, logger)
