@@ -147,7 +147,7 @@ def get_log_transform_columns(X_train_normal: pd.DataFrame, feat_cfg, logger) ->
     exit(1)
 
 def apply_log1p_transform(X_train: pd.DataFrame, X_train_normal: pd.DataFrame, X_val: pd.DataFrame, X_test: pd.DataFrame, feat_cfg, 
-                          logger) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+                          logger) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame, list[str], list]:
     log_columns = get_log_transform_columns(X_train_normal, feat_cfg, logger)
     valid_log_columns = []
     skipped_log_columns = []
@@ -175,7 +175,7 @@ def apply_log1p_transform(X_train: pd.DataFrame, X_train_normal: pd.DataFrame, X
 
     logger.info(f"Applied log1p transform to {len(log_columns)} columns")
     logger.info(f"Skipped {len(skipped_log_columns)} log1p columns due to negative values")
-    return X_train, X_train_normal, X_val, X_test
+    return X_train, X_train_normal, X_val, X_test, valid_log_columns, skipped_log_columns
 
 def remove_correlated_features(corr_matrix: pd.DataFrame, threshold: float, logger) -> list[str]:
     upper = corr_matrix.abs().where(np.triu(np.ones(corr_matrix.shape), k=1).astype(bool))
@@ -205,7 +205,7 @@ def get_scaler(scaler_name: str, logger):
         exit(1)
 
 def scale_datasets(X_train_normal: pd.DataFrame, X_val: pd.DataFrame, X_test: pd.DataFrame, scaler_name: str,
-                   logger) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+                   logger) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, object]:
     scaler = get_scaler(scaler_name, logger)
 
     logger.info("Fitting scaler on X_train_normal")
@@ -222,7 +222,7 @@ def scale_datasets(X_train_normal: pd.DataFrame, X_val: pd.DataFrame, X_test: pd
     X_test_scaled = pd.DataFrame(X_test_scaled, columns=X_test.columns, index=X_test.index)
     logger.info(f"Scaled X_test shape: {X_test_scaled.shape}")
 
-    return X_train_scaled, X_val_scaled, X_test_scaled
+    return X_train_scaled, X_val_scaled, X_test_scaled, scaler
 
 def validate_numeric_data(X_train_normal: pd.DataFrame, X_val: pd.DataFrame, X_test: pd.DataFrame, logger) -> None:
     for name, X in [("X_train_normal", X_train_normal), ("X_val", X_val), ("X_test", X_test)]:
@@ -264,7 +264,7 @@ def build_selected_dataframe(selected_array, selected_columns: list[str], origin
 
 def apply_feature_selection(X_train: pd.DataFrame, X_train_normal: pd.DataFrame, X_val: pd.DataFrame, X_test: pd.DataFrame,
                             y_train: pd.Series, method: str, k_features: int | None, variance_threshold: float,
-                            logger) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+                            logger) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, object, list[str]]:
     method = method.lower()
 
     if method == "select_k_best":
@@ -300,7 +300,7 @@ def apply_feature_selection(X_train: pd.DataFrame, X_train_normal: pd.DataFrame,
     X_val_selected = build_selected_dataframe(X_val_selected, selected_columns, X_val.index, "X_val", logger)
     X_test_selected = build_selected_dataframe(X_test_selected, selected_columns, X_test.index, "X_test", logger)
 
-    return X_train_normal_selected, X_val_selected, X_test_selected
+    return X_train_normal_selected, X_val_selected, X_test_selected, selector, selected_columns
 
 def prepare_ae_data(config: dict):
     logger = get_logger(config)
@@ -320,6 +320,20 @@ def prepare_ae_data(config: dict):
         logger.error(f"Loading existing split data failed")
         exit(1)
 
+    preprocessing_artifacts = {
+        "feature_columns_before_preprocessing": X_train.columns.tolist(),
+        "dropped_correlated_features": [],
+        "scaler": None,
+        "selector": None,
+        "selected_features": None,
+        "feature_columns": None,
+        "network_features_enabled": features_cfg.get("use_network_features", False),
+        "drop_original_port_columns": features_cfg.get("drop_original_port_columns", False),
+        "log_transform_columns": [],
+        "skipped_log_transform_columns": [],
+        "normal_label": data_cfg["normal_label"],
+    }
+
     X_train_normal, y_train_normal = filter_normal_training_data(X_train, y_train, data_cfg["normal_label"], logger)
 
     if features_cfg.get("use_network_features", False):
@@ -336,7 +350,11 @@ def prepare_ae_data(config: dict):
 
     if features_cfg["log_transform"]:
         logger.info("Log1p transform is enabled")
-        X_train, X_train_normal, X_val, X_test = apply_log1p_transform(X_train, X_train_normal, X_val, X_test, features_cfg["log_transform_columns"], logger)
+        X_train, X_train_normal, X_val, X_test, log_columns, skipped_log_columns = apply_log1p_transform(
+            X_train, X_train_normal, X_val, X_test, features_cfg["log_transform_columns"], logger
+        )
+        preprocessing_artifacts["log_transform_columns"] = log_columns
+        preprocessing_artifacts["skipped_log_transform_columns"] = skipped_log_columns
     else:
         logger.info("Log1p transform is disabled")
 
@@ -346,6 +364,7 @@ def prepare_ae_data(config: dict):
     if features_cfg["remove_correlated_features"]:
         logger.info(f"Removing correlated features")
         to_drop = remove_correlated_features(corr_matrix, features_cfg["correlation_threshold"], logger)
+        preprocessing_artifacts["dropped_correlated_features"] = to_drop
         if to_drop:
             X_train = X_train.drop(columns=to_drop)
             X_train_normal = X_train_normal.drop(columns=to_drop)
@@ -360,18 +379,22 @@ def prepare_ae_data(config: dict):
     if features_cfg["use_feature_selection"]:
         logger.info("Feature selection is enabled")
 
-        X_train_normal, X_val, X_test = apply_feature_selection(X_train=X_train, X_train_normal=X_train_normal, X_val=X_val,
+        X_train_normal, X_val, X_test, selector, selected_columns = apply_feature_selection(X_train=X_train, X_train_normal=X_train_normal, X_val=X_val,
                     X_test=X_test, y_train=y_train, method=features_cfg["feature_selection_method"], k_features=features_cfg["selected_k_features"],
                     variance_threshold=features_cfg["variance_threshold"], logger=logger)
+        preprocessing_artifacts["selector"] = selector
+        preprocessing_artifacts["selected_features"] = selected_columns
     else:
         logger.info("Feature selection is disabled")
 
     if features_cfg["scaling"]:
         logger.info("Scaling is enabled")
-        X_train_normal, X_val, X_test = scale_datasets(X_train_normal, X_val, X_test, features_cfg["scaler"], logger)
+        X_train_normal, X_val, X_test, scaler = scale_datasets(X_train_normal, X_val, X_test, features_cfg["scaler"], logger)
+        preprocessing_artifacts["scaler"] = scaler
     else:
         logger.info("Scaling is disabled")
 
     validate_numeric_data(X_train_normal, X_val, X_test, logger)
+    preprocessing_artifacts["feature_columns"] = X_train_normal.columns.tolist()
 
-    return X_train_normal, X_val, X_test, y_train_normal, y_val, y_test
+    return X_train_normal, X_val, X_test, y_train_normal, y_val, y_test, preprocessing_artifacts

@@ -92,7 +92,8 @@ def remove_correlated_features(df: pd.DataFrame, threshold: float, logger):
     return df_reduced, to_drop
 
 def apply_feature_selection(X_train: pd.DataFrame, X_val: pd.DataFrame, X_test: pd.DataFrame, y_train: pd.Series,
-                            method: str, k_features: int, random_state: int, logger) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+                            method: str, k_features: int, random_state: int,
+                            logger) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, object, list[str]]:
     #todo: zminic na raise
     if k_features is None:
         logger.critical("selected_k_features must be provided when feature selection is enabled")
@@ -133,7 +134,7 @@ def apply_feature_selection(X_train: pd.DataFrame, X_val: pd.DataFrame, X_test: 
     X_test_selected = pd.DataFrame(X_test_selected, columns=selected_columns, index=X_test.index)
     logger.info(f"X_test shape after feature selection: {X_test_selected.shape}")
 
-    return X_train_selected, X_val_selected, X_test_selected
+    return X_train_selected, X_val_selected, X_test_selected, selector, selected_columns
 
 def apply_smote(X_train: pd.DataFrame, y_train: pd.Series, random_state: int, logger):
     logger.info("Applying SMOTE to training data")
@@ -167,11 +168,22 @@ def prepare_dt_data(config: dict):
         logger.error("Could not load existing split data")
         exit(1)
 
+    preprocessing_artifacts = {
+        "feature_columns_before_preprocessing": X_train.columns.tolist(),
+        "dropped_columns": features_cfg["drop_columns"],
+        "dropped_correlated_features": [],
+        "scaler": None,
+        "selector": None,
+        "selected_features": None,
+        "feature_columns": None,
+    }
+
     corr_matrix=compute_correlation_matrix(X_train, logger)
     plot_correlation_matrix(corr_matrix, output_cfg["output_dir"], "base_corr.jpg" ,logger)
     if features_cfg["remove_correlated_features"]:
         logger.info(f"Removing correlated features")
         X_train, to_drop = remove_correlated_features(X_train, features_cfg["correlation_threshold"], logger)
+        preprocessing_artifacts["dropped_correlated_features"] = to_drop
         X_val.drop(columns=to_drop, inplace=True)
         X_test.drop(columns=to_drop, inplace=True)
         corr_matrix = compute_correlation_matrix(X_train, logger)
@@ -179,8 +191,12 @@ def prepare_dt_data(config: dict):
 
     if features_cfg["use_feature_selection"]:
         logger.info("Feature selection is enabled")
-        X_train, X_val, X_test = apply_feature_selection(X_train, X_val, X_test, y_train, features_cfg["feature_selection_method"],
-                                                         features_cfg["selected_k_features"], config["experiment"]["random_state"], logger)
+        X_train, X_val, X_test, selector, selected_columns = apply_feature_selection(
+            X_train, X_val, X_test, y_train, features_cfg["feature_selection_method"],
+            features_cfg["selected_k_features"], config["experiment"]["random_state"], logger
+        )
+        preprocessing_artifacts["selector"] = selector
+        preprocessing_artifacts["selected_features"] = selected_columns
     else:
         logger.info("Feature selection is disabled")
 
@@ -190,4 +206,6 @@ def prepare_dt_data(config: dict):
         X_train, y_train = apply_smote(X_train, y_train, exp_cfg["random_state"], logger)
         logger.info(f"Class distribution after SMOTE:\n{y_train.value_counts()}")
 
-    return X_train, X_val, X_test, y_train, y_val, y_test
+    preprocessing_artifacts["feature_columns"] = X_train.columns.tolist()
+
+    return X_train, X_val, X_test, y_train, y_val, y_test, preprocessing_artifacts

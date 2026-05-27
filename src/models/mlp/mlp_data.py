@@ -96,7 +96,7 @@ def get_scaler(scaler_name: str, logger):
         exit(1)
 
 def scale_datasets(X_train: pd.DataFrame, X_val: pd.DataFrame, X_test: pd.DataFrame, scaler_name: str,
-                   logger) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+                   logger) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, object]:
     scaler = get_scaler(scaler_name, logger)
 
     logger.info("Fitting scaler on X_train")
@@ -113,10 +113,11 @@ def scale_datasets(X_train: pd.DataFrame, X_val: pd.DataFrame, X_test: pd.DataFr
     X_test_scaled = pd.DataFrame(X_test_scaled, columns=X_test.columns, index=X_test.index)
     logger.info(f"Scaled X_test shape: {X_test_scaled.shape}")
 
-    return X_train_scaled, X_val_scaled, X_test_scaled
+    return X_train_scaled, X_val_scaled, X_test_scaled, scaler
 
 def apply_feature_selection(X_train: pd.DataFrame, X_val: pd.DataFrame, X_test: pd.DataFrame, y_train: pd.Series,
-                            method: str, k_features: int, logger) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+                            method: str, k_features: int,
+                            logger) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, object, list[str]]:
     #todo: zminic na raise
     if k_features is None:
         logger.critical("selected_k_features must be provided when feature selection is enabled")
@@ -153,7 +154,7 @@ def apply_feature_selection(X_train: pd.DataFrame, X_val: pd.DataFrame, X_test: 
     X_test_selected = pd.DataFrame(X_test_selected, columns=selected_columns, index=X_test.index)
     logger.info(f"X_test shape after feature selection: {X_test_selected.shape}")
 
-    return X_train_selected, X_val_selected, X_test_selected
+    return X_train_selected, X_val_selected, X_test_selected, selector, selected_columns
 
 def apply_smote(X_train: pd.DataFrame, y_train: pd.Series, random_state: int, logger):
     logger.info("Applying SMOTE to training data")
@@ -202,11 +203,21 @@ def prepare_mlp_data(config: dict):
         logger.error(f"Loading existing split data failed")
         exit(1)
 
+    preprocessing_artifacts = {
+        "feature_columns_before_preprocessing": X_train.columns.tolist(),
+        "dropped_correlated_features": [],
+        "scaler": None,
+        "selector": None,
+        "selected_features": None,
+        "feature_columns": None,
+    }
+
     corr_matrix=compute_correlation_matrix(X_train, logger)
     plot_correlation_matrix(corr_matrix, output_cfg["output_dir"], "base_corr.jpg" ,logger)
     if features_cfg["remove_correlated_features"]:
         logger.info(f"Removing correlated features")
         to_drop = remove_correlated_features(corr_matrix, features_cfg["correlation_threshold"], logger)
+        preprocessing_artifacts["dropped_correlated_features"] = to_drop
         if to_drop:
             X_train = X_train.drop(columns=to_drop)
             X_val = X_val.drop(columns=to_drop)
@@ -217,14 +228,19 @@ def prepare_mlp_data(config: dict):
 
     if prep_cfg["scaling"]:
         logger.info("Scaling is enabled")
-        X_train, X_val, X_test = scale_datasets(X_train, X_val, X_test, prep_cfg["scaler"], logger)
+        X_train, X_val, X_test, scaler = scale_datasets(X_train, X_val, X_test, prep_cfg["scaler"], logger)
+        preprocessing_artifacts["scaler"] = scaler
     else:
         logger.info("Scaling is disabled")
 
     if features_cfg["use_feature_selection"]:
         logger.info("Feature selection is enabled")
-        X_train, X_val, X_test = apply_feature_selection(X_train, X_val, X_test, y_train, features_cfg["feature_selection_method"],
-                                                         features_cfg["selected_k_features"], logger)
+        X_train, X_val, X_test, selector, selected_columns = apply_feature_selection(
+            X_train, X_val, X_test, y_train, features_cfg["feature_selection_method"],
+            features_cfg["selected_k_features"], logger
+        )
+        preprocessing_artifacts["selector"] = selector
+        preprocessing_artifacts["selected_features"] = selected_columns
     else:
         logger.info("Feature selection is disabled")
 
@@ -235,5 +251,6 @@ def prepare_mlp_data(config: dict):
         logger.info(f"Class distribution after SMOTE:\n{y_train.value_counts()}")
 
     validate_numeric_data(X_train, X_val, X_test, logger)
+    preprocessing_artifacts["feature_columns"] = X_train.columns.tolist()
 
-    return X_train, X_val, X_test, y_train, y_val, y_test
+    return X_train, X_val, X_test, y_train, y_val, y_test, preprocessing_artifacts
