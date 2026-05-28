@@ -845,6 +845,7 @@ def get_tuning_param_grid(config: dict, logger: logging.Logger) -> list[dict]:
     if len(param_grid) < len(raw_param_grid):
         logger.info(f"Skipped {len(raw_param_grid) - len(param_grid)} duplicate effective tuning combinations")
     logger.info(f"Tuned parameters: {param_names}")
+    return param_grid
 
 def run_single_cnn_experiment(params: dict, X_train, X_val, y_train, y_val, config: dict, device, logger: logging.Logger) -> tuple[dict, nn.Module, pd.DataFrame, dict]:
     experiment_config = copy.deepcopy(config)
