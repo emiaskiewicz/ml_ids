@@ -1,0 +1,22 @@
+Experiment: SVM-01m-tune
+Split: Validation
+Accuracy: 0.9434
+Precision: 0.8452
+Recall: 0.8670
+F1-score: 0.8560
+ROC-AUC: 0.9818
+Average Precision: 0.9300
+
+Confusion Matrix:
+[[217863   8648]
+ [  7245  47234]]
+
+Classification Report:
+              precision    recall  f1-score   support
+
+           0       0.97      0.96      0.96    226511
+           1       0.85      0.87      0.86     54479
+
+    accuracy                           0.94    280990
+   macro avg       0.91      0.91      0.91    280990
+weighted avg       0.94      0.94      0.94    280990

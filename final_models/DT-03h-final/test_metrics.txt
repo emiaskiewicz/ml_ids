@@ -1,0 +1,22 @@
+Experiment: DT-03h-tune
+Split: Test
+Accuracy: 0.9982
+Precision: 0.9965
+Recall: 0.9943
+F1-score: 0.9954
+ROC-AUC: 0.9995
+Average Precision: 0.9985
+
+Confusion Matrix:
+[[452639    384]
+ [   622 109172]]
+
+Classification Report:
+              precision    recall  f1-score   support
+
+           0       1.00      1.00      1.00    453023
+           1       1.00      0.99      1.00    109794
+
+    accuracy                           1.00    562817
+   macro avg       1.00      1.00      1.00    562817
+weighted avg       1.00      1.00      1.00    562817

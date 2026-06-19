@@ -1,0 +1,22 @@
+Experiment: CNN-20e-tune
+Split: Test
+Accuracy: 0.9814
+Precision: 0.9158
+Recall: 0.9898
+F1-score: 0.9514
+ROC-AUC: 0.9978
+
+Confusion Matrix:
+[[443752   9271]
+ [  1041 100837]]
+
+Classification Report:
+              precision    recall  f1-score   support
+
+           0       1.00      0.98      0.99    453023
+           1       0.92      0.99      0.95    101878
+
+    accuracy                           0.98    554901
+   macro avg       0.96      0.98      0.97    554901
+weighted avg       0.98      0.98      0.98    554901
+

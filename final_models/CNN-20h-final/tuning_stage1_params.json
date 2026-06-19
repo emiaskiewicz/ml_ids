@@ -1,0 +1,27 @@
+{
+    "conv_channels": [
+        16,
+        32
+    ],
+    "kernel_size": 7,
+    "fc_layers": [
+        64
+    ],
+    "activation": "relu",
+    "dropout": 0.0,
+    "batch_norm": true,
+    "learning_rate": 0.001,
+    "batch_size": 4096,
+    "weight_decay": 0.0001,
+    "use_pos_weight": false,
+    "pos_weight_mode": "auto",
+    "pos_weight_value": 1.0,
+    "scheduler_enabled": true,
+    "scheduler_factor": 0.5,
+    "scheduler_patience": 2,
+    "scheduler_min_lr": 1e-06,
+    "global_pooling": true,
+    "input_dropout": 0.0,
+    "input_noise_std": 0.0,
+    "gradient_clip_norm": null
+}

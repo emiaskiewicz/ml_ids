@@ -1,0 +1,22 @@
+Experiment: MLP-04h-tune
+Split: Validation
+Accuracy: 0.9889
+Precision: 0.9710
+Recall: 0.9723
+F1-score: 0.9716
+ROC-AUC: 0.9993
+
+Confusion Matrix:
+[[224918   1593]
+ [  1522  53375]]
+
+Classification Report:
+              precision    recall  f1-score   support
+
+           0       0.99      0.99      0.99    226511
+           1       0.97      0.97      0.97     54897
+
+    accuracy                           0.99    281408
+   macro avg       0.98      0.98      0.98    281408
+weighted avg       0.99      0.99      0.99    281408
+

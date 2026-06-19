@@ -1,0 +1,6 @@
+{
+    "experiment_name": "SVM-01m-tune",
+    "dataset_variant": "medium",
+    "decision_threshold": -0.1,
+    "selected_features_count": 71
+}

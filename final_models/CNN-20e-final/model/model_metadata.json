@@ -1,0 +1,7 @@
+{
+    "experiment_name": "CNN-20m-final",
+    "dataset_variant": "medium",
+    "input_dim": 40,
+    "decision_threshold": 0.45,
+    "selected_features_count": 40
+}

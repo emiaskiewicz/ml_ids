@@ -1,0 +1,6 @@
+{
+    "experiment_name": "DT-03h-tune",
+    "dataset_variant": "hard",
+    "decision_threshold": 0.5,
+    "selected_features_count": 40
+}

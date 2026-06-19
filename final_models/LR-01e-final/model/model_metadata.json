@@ -1,0 +1,6 @@
+{
+    "experiment_name": "LR-01e-tune",
+    "dataset_variant": "easy",
+    "decision_threshold": 0.5,
+    "selected_features_count": 71
+}

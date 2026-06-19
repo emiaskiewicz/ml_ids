@@ -1,0 +1,4 @@
+{
+    "decision_threshold": 0.45,
+    "metric": "f1"
+}

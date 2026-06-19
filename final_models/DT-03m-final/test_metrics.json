@@ -1,0 +1,21 @@
+{
+    "experiment_name": "DT-03m-tune",
+    "split_name": "Test",
+    "accuracy": 0.9987721982988719,
+    "precision": 0.996314327364744,
+    "recall": 0.9973567554172748,
+    "f1": 0.9968352688645495,
+    "roc_auc": 0.9994061376021237,
+    "average_precision": 0.9980781826962999,
+    "confusion_matrix": [
+        [
+            452621,
+            402
+        ],
+        [
+            288,
+            108669
+        ]
+    ],
+    "classification_report": "              precision    recall  f1-score   support\n\n           0       1.00      1.00      1.00    453023\n           1       1.00      1.00      1.00    108957\n\n    accuracy                           1.00    561980\n   macro avg       1.00      1.00      1.00    561980\nweighted avg       1.00      1.00      1.00    561980\n"
+}

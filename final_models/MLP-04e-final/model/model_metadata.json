@@ -1,0 +1,7 @@
+{
+    "experiment_name": "MLP-04e-tune",
+    "dataset_variant": "easy",
+    "input_dim": 40,
+    "decision_threshold": 0.55,
+    "selected_features_count": 40
+}

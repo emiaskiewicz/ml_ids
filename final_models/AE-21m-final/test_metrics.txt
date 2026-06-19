@@ -1,0 +1,24 @@
+Experiment: AE-21m-final
+Split: Test
+Reconstruction threshold: 0.088599
+Accuracy: 0.9288
+Precision: 0.8488
+Recall: 0.7701
+F1-score: 0.8075
+ROC-AUC: 0.9387
+Average Precision: 0.8475
+
+Confusion Matrix:
+[[438070  14953]
+ [ 25047  83910]]
+
+Classification Report:
+              precision    recall  f1-score   support
+
+           0       0.95      0.97      0.96    453023
+           1       0.85      0.77      0.81    108957
+
+    accuracy                           0.93    561980
+   macro avg       0.90      0.87      0.88    561980
+weighted avg       0.93      0.93      0.93    561980
+

@@ -1,0 +1,22 @@
+Experiment: LR-01h-tune
+Split: Validation
+Accuracy: 0.9409
+Precision: 0.8173
+Recall: 0.8977
+F1-score: 0.8556
+ROC-AUC: 0.9817
+Average Precision: 0.9331
+
+Confusion Matrix:
+[[215494  11017]
+ [  5615  49282]]
+
+Classification Report:
+              precision    recall  f1-score   support
+
+           0       0.97      0.95      0.96    226511
+           1       0.82      0.90      0.86     54897
+
+    accuracy                           0.94    281408
+   macro avg       0.90      0.92      0.91    281408
+weighted avg       0.94      0.94      0.94    281408

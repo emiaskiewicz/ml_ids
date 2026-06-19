@@ -1,0 +1,21 @@
+{
+    "experiment_name": "SVM-01h-tune",
+    "split_name": "Test",
+    "accuracy": 0.9398294649948384,
+    "precision": 0.8425007893905905,
+    "recall": 0.8505656046778513,
+    "f1": 0.846513988914018,
+    "roc_auc": 0.9796769359496351,
+    "average_precision": 0.9226778269329396,
+    "confusion_matrix": [
+        [
+            435565,
+            17458
+        ],
+        [
+            16407,
+            93387
+        ]
+    ],
+    "classification_report": "              precision    recall  f1-score   support\n\n           0       0.96      0.96      0.96    453023\n           1       0.84      0.85      0.85    109794\n\n    accuracy                           0.94    562817\n   macro avg       0.90      0.91      0.90    562817\nweighted avg       0.94      0.94      0.94    562817\n"
+}

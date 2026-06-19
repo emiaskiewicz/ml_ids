@@ -1,0 +1,21 @@
+{
+    "experiment_name": "LR-01e-tune",
+    "split_name": "Test",
+    "accuracy": 0.9583204932050943,
+    "precision": 0.8769024600363741,
+    "recall": 0.8992127839180196,
+    "f1": 0.8879174985946071,
+    "roc_auc": 0.9913289855339912,
+    "average_precision": 0.9620044205091551,
+    "confusion_matrix": [
+        [
+            440163,
+            12860
+        ],
+        [
+            10268,
+            91610
+        ]
+    ],
+    "classification_report": "              precision    recall  f1-score   support\n\n           0       0.98      0.97      0.97    453023\n           1       0.88      0.90      0.89    101878\n\n    accuracy                           0.96    554901\n   macro avg       0.93      0.94      0.93    554901\nweighted avg       0.96      0.96      0.96    554901\n"
+}
