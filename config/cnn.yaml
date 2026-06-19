@@ -1,10 +1,10 @@
 experiment:
-  name: "CNN-01e"
+  name: "CNN-01m"
   random_state: 23
 
 data:
   input_dir: "data/cleaned"
-  dataset_variant: "easy"
+  dataset_variant: "medium"
   target_column: "Target"
   label_column: "Label"
 
@@ -13,7 +13,7 @@ split:
   val_size: 0.1
   stratify: true
   load_existing_split: true
-  split_dir: "data/split/easy/"
+  split_dir: "data/split/medium/"
 
 features:
   remove_correlated_features: true
@@ -88,14 +88,15 @@ tuning_stage_2:
   threshold_step: 0.05
 
 output:
-  output_dir: "outputs/cnn/easy/CNN-01e"
-  summary_path: "outputs/cnn/easy/cnn_e_results_sum.csv"
+  output_dir: "outputs/cnn/medium/CNN-01m"
+  summary_path: "outputs/cnn/medium/cnn_m_results_sum.csv"
   save_metrics: true
   save_plots: true
+  save_model: false
   save_predictions: true
   save_tuning_results: true
   evaluate_test: false
 
 logging:
-  log_path: "logs/cnn/easy/CNN-01e.log"
+  log_path: "logs/cnn/medium/CNN-01m.log"
   log_level: "INFO"
