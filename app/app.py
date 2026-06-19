@@ -113,6 +113,10 @@ def load_test_data(data_path: Path, sample_size: int | None) -> tuple[pd.DataFra
     if TARGET_COLUMN not in df.columns:
         raise ValueError(f"Brak kolumny celu '{TARGET_COLUMN}' w pliku {data_path}")
 
+    if sample_size > len(df):
+        print(f"Uwaga: zmienna sample_size ({sample_size}) jest wieksza niz liczba rekordow w zbiorze danych testowych ({len(df)}). Uzywam calego zbioru testowego.")
+        sample_size = None
+
     if sample_size is not None and sample_size < len(df):
         df = df.sample(n=sample_size, random_state=42)
 
