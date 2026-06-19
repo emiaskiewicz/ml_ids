@@ -4,6 +4,25 @@ Aplikacja konsolowa umożliwia uruchomienie zapisanych modeli końcowych wykorzy
 
 Aplikacja nie trenuje modeli od nowa. Do działania wykorzystuje zapisane artefakty modeli oraz przygotowane pliki testowe.
 
+## Dane źródłowe
+
+Pełne pliki danych wykorzystane w eksperymentach są dostępne w osobnym repozytorium:
+
+```text
+https://github.com/emiaskiewicz/cicids2017-thesis-data.git
+```
+
+Pliki w repozytorium z danymi są przechowywane z użyciem Git LFS. Po sklonowaniu repozytorium należy upewnić się, że Git LFS jest zainstalowany, a następnie pobrać właściwą zawartość plików:
+
+```bash
+git clone https://github.com/emiaskiewicz/cicids2017-thesis-data.git
+cd cicids2017-thesis-data
+git lfs pull
+```
+
+Repozytorium z aplikacją zawiera pliki wymagane do uruchomienia programu CLI, natomiast repozytorium z danymi zawiera pełne pliki źródłowe i przygotowane warianty danych użyte podczas eksperymentów.
+
+
 ## Struktura wykorzystywana przez aplikację
 
 Ścieżki do modeli i danych są ustawione automatycznie:
