@@ -44,16 +44,14 @@ fi
 echo "Pobieranie plikow Git LFS wymaganych przez aplikacje..."
 
 if command -v git >/dev/null 2>&1 && git lfs version >/dev/null 2>&1; then
-    git lfs pull --include="data/split/**/test.csv,final_models/**"
+    git lfs pull
 
     if [ $? -ne 0 ]; then
         echo "Nie udalo sie pobrac plikow Git LFS."
-        echo "Sprawdz, czy Git LFS jest zainstalowany i czy repozytorium ma dostep do plikow."
         exit 1
     fi
 else
     echo "Nie znaleziono Git LFS."
-    echo "Zainstaluj Git LFS albo pobierz pelne pliki danych i modeli recznie."
     exit 1
 fi
 

@@ -44,7 +44,7 @@ if errorlevel 1 (
     exit /b 1
 )
 
-git lfs pull --include="data/split/**/test.csv,final_models/**"
+git lfs pull
 if errorlevel 1 (
     echo Nie udalo sie pobrac plikow Git LFS.
     pause
