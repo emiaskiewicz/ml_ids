@@ -1,5 +1,4 @@
 import logging
-import winsound
 from pathlib import Path
 import yaml
 from lr_data import prepare_lr_data, get_logger
@@ -609,8 +608,6 @@ def main() -> None:
             evaluate_and_save_split(model, X_test, y_test, "Test", threshold, config, logger)
         else:
             logger.info("Test evaluation disabled for this run")
-
-    winsound.Beep(2500,1000)
 
 if __name__ == "__main__":
     main()

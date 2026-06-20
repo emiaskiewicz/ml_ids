@@ -1,6 +1,5 @@
 import logging
 import csv
-#import winsound
 from pathlib import Path
 import yaml
 from mlp_data import prepare_mlp_data, get_logger
@@ -1213,8 +1212,6 @@ def main() -> None:
                                     config=config, logger=logger, training_summary=training_summary, history_df=None)
         else:
             logger.info("Test evaluation disabled for this run")
-
-    #winsound.Beep(2500,1000)
 
 if __name__ == "__main__":
     main()

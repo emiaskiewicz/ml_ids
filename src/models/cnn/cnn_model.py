@@ -32,6 +32,7 @@ RESULTS_COLUMNS = ["experiment", "dataset_variant", "split", "accuracy", "precis
 
 IGNORED_TUNING_PARAMS_RULES = [
     {"when": {"scheduler_enabled": False}, "ignore": ["scheduler_factor", "scheduler_patience", "scheduler_min_lr"]},
+    {"when": {"use_pos_weight": False}, "ignore": ["pos_weight_mode", "pos_weight_value"]},
 ]
 
 def load_config(config_path: Path) -> dict:

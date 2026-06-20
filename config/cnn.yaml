@@ -23,7 +23,9 @@ features:
   selected_k_features: 40
   use_network_features: false
   drop_original_port_columns: false
-
+  smote: false
+  scaling: true
+  
 preprocessing:
   smote: false
   scaling: true

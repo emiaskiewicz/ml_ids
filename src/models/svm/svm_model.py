@@ -1,7 +1,6 @@
 import logging
 import subprocess
 import csv
-import winsound
 from pathlib import Path
 import yaml
 from svm_data import prepare_svm_data, get_logger
@@ -614,7 +613,6 @@ def main() -> None:
         else:
             logger.info("Test evaluation disabled for this run")
 
-    winsound.Beep(2500,1000)
     #subprocess.run(["paplay", "/usr/share/sounds/freedesktop/stereo/complete.oga"], check=False)
 
 if __name__ == "__main__":
